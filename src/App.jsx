@@ -149,11 +149,11 @@ export default function App() {
   const ctx = { houses, rooms, contracts, tenants, invoices, expenses, loadAll, notify };
 
   const NAV = [
-    { key: "tongquan", label: "Tổng quan", icon: Home },
-    { key: "nha", label: "Nhà & phòng", icon: Building2 },
-    { key: "khach", label: "Khách thuê", icon: Users },
-    { key: "hoadon", label: "Hóa đơn", icon: Receipt },
-    { key: "thuchi", label: "Thu chi", icon: Wallet },
+    { key: "tongquan", label: "Tổng quan", shortLabel: "Tổng quan", icon: Home },
+    { key: "nha", label: "Nhà & phòng", shortLabel: "Nhà/phòng", icon: Building2 },
+    { key: "khach", label: "Khách thuê", shortLabel: "Khách", icon: Users },
+    { key: "hoadon", label: "Hóa đơn", shortLabel: "Hóa đơn", icon: Receipt },
+    { key: "thuchi", label: "Thu chi", shortLabel: "Thu chi", icon: Wallet },
   ];
 
   return (
@@ -198,6 +198,19 @@ export default function App() {
           </>
         )}
       </main>
+
+      <nav className="bottom-nav">
+        {NAV.map((n) => (
+          <button
+            key={n.key}
+            className={`bottom-nav-item ${tab === n.key ? "active" : ""}`}
+            onClick={() => setTab(n.key)}
+          >
+            <n.icon size={20} strokeWidth={tab === n.key ? 2.2 : 1.8} />
+            <span>{n.shortLabel}</span>
+          </button>
+        ))}
+      </nav>
 
       <Toast toasts={toasts} />
     </div>
@@ -1790,9 +1803,27 @@ const CSS = `
 .muted { color: var(--ink-400); }
 .small { font-size: 12px; }
 
+/* ---------- BOTTOM NAV (mobile) ---------- */
+.bottom-nav {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+  background: #fff; border-top: 1px solid var(--line);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+  justify-content: space-around;
+  box-shadow: 0 -4px 16px rgba(15,23,42,0.06);
+}
+.bottom-nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  flex: 1; min-width: 0; border: none; background: none; cursor: pointer;
+  padding: 6px 2px; color: var(--ink-400); font-size: 11px; font-weight: 600;
+}
+.bottom-nav-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.bottom-nav-item.active { color: var(--blue-600); }
+
 @media (max-width: 1024px) {
   .sidebar { display: none; }
-  .main { padding: 20px; }
+  .main { padding: 20px; padding-bottom: 90px; }
   .two-col, .house-grid, .room-grid, .invoice-list, .stat-grid { grid-template-columns: 1fr; }
+  .bottom-nav { display: flex; }
 }
 `;

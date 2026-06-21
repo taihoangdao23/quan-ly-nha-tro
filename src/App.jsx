@@ -15,8 +15,6 @@ import {
   Circle,
   Trash2,
   Pencil,
-  ChevronRight,
-  ArrowLeft,
   TrendingUp,
   TrendingDown,
   AlertCircle,
@@ -220,7 +218,7 @@ export default function App() {
 // ============================================================
 // TAB: TỔNG QUAN
 // ============================================================
-function TongQuan({ houses, rooms, contracts, invoices, expenses }) {
+function TongQuan({ rooms, contracts, invoices, expenses }) {
   const occupied = rooms.filter((r) => r.status === "da_thue").length;
   const empty = rooms.length - occupied;
   const unpaid = invoices.filter((i) => i.status === "chua_thanh_toan");
@@ -306,21 +304,17 @@ function TongQuan({ houses, rooms, contracts, invoices, expenses }) {
         </div>
 
         <div className="panel">
-          <h3>Theo từng nhà</h3>
+          <h3>Phòng còn trống</h3>
           <div className="house-mini-list">
-            {houses.map((h) => {
-              const hRooms = rooms.filter((r) => r.house_id === h.id);
-              const hOccupied = hRooms.filter((r) => r.status === "da_thue").length;
-              return (
-                <div key={h.id} className="house-mini-row">
-                  <div>
-                    <p className="house-mini-name">{h.name}</p>
-                    <p className="house-mini-addr">{h.address}</p>
-                  </div>
-                  <span className="pill">{hOccupied}/{hRooms.length} phòng</span>
+            {rooms.filter((r) => r.status === "trong").map((r) => (
+              <div key={r.id} className="house-mini-row">
+                <div>
+                  <p className="house-mini-name">{r.room_number}</p>
                 </div>
-              );
-            })}
+                <span className="pill">{fmtVND(r.rent_price)}</span>
+              </div>
+            ))}
+            {empty === 0 && <p className="muted small">Tất cả phòng đều đã có khách thuê.</p>}
           </div>
         </div>
       </div>
@@ -360,114 +354,17 @@ function TongQuan({ houses, rooms, contracts, invoices, expenses }) {
 // ============================================================
 // TAB: NHÀ & PHÒNG
 // ============================================================
-function NhaPhong({ houses, rooms, contracts, loadAll, notify }) {
-  const [selectedHouse, setSelectedHouse] = useState(null);
-  const [showHouseModal, setShowHouseModal] = useState(false);
-  const [editHouse, setEditHouse] = useState(null);
-  const [deleteHouse, setDeleteHouse] = useState(null);
+function NhaPhong({ rooms, contracts, tenants, loadAll, notify }) {
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [editRoom, setEditRoom] = useState(null);
-
-  if (!selectedHouse) {
-    return (
-      <div className="page">
-        <header className="page-head row-between">
-          <div>
-            <h1>Nhà & phòng</h1>
-            <p>Quản lý các địa chỉ nhà trọ và phòng trực thuộc</p>
-          </div>
-          <button
-            className="btn-primary"
-            onClick={() => {
-              setEditHouse(null);
-              setShowHouseModal(true);
-            }}
-          >
-            <Plus size={16} /> Thêm nhà
-          </button>
-        </header>
-
-        <div className="house-grid">
-          {houses.map((h) => {
-            const hRooms = rooms.filter((r) => r.house_id === h.id);
-            const occupied = hRooms.filter((r) => r.status === "da_thue").length;
-            return (
-              <div key={h.id} className="house-card">
-                <button className="house-card-clickable" onClick={() => setSelectedHouse(h)}>
-                  <div className="house-card-top">
-                    <Building2 size={20} strokeWidth={1.6} />
-                    <ChevronRight size={18} className="muted" />
-                  </div>
-                  <h3>{h.name}</h3>
-                  <p className="muted">{h.address}</p>
-                  <div className="house-card-foot">
-                    <span className="pill">{hRooms.length} phòng</span>
-                    <span className="pill pill-green">{occupied} đang thuê</span>
-                  </div>
-                </button>
-                <div className="house-card-actions">
-                  <button
-                    className="btn-ghost-sm"
-                    onClick={() => {
-                      setEditHouse(h);
-                      setShowHouseModal(true);
-                    }}
-                  >
-                    <Pencil size={14} /> Sửa
-                  </button>
-                  <button className="btn-ghost-sm btn-ghost-danger" onClick={() => setDeleteHouse(h)}>
-                    <Trash2 size={14} /> Xóa
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {houses.length === 0 && (
-            <EmptyState icon={Building2} title="Chưa có nhà nào" hint="Thêm nhà trọ đầu tiên để bắt đầu" />
-          )}
-        </div>
-
-        {showHouseModal && (
-          <HouseFormModal
-            house={editHouse}
-            onClose={() => setShowHouseModal(false)}
-            onSaved={() => {
-              setShowHouseModal(false);
-              loadAll();
-              notify(editHouse ? "Đã cập nhật nhà" : "Đã thêm nhà mới");
-            }}
-            notify={notify}
-          />
-        )}
-
-        {deleteHouse && (
-          <DeleteHouseModal
-            house={deleteHouse}
-            roomCount={rooms.filter((r) => r.house_id === deleteHouse.id).length}
-            onClose={() => setDeleteHouse(null)}
-            onDeleted={() => {
-              setDeleteHouse(null);
-              loadAll();
-              notify("Đã xóa nhà");
-            }}
-            notify={notify}
-          />
-        )}
-      </div>
-    );
-  }
-
-  const hRooms = rooms.filter((r) => r.house_id === selectedHouse.id);
+  const [deleteRoom, setDeleteRoom] = useState(null);
 
   return (
     <div className="page">
       <header className="page-head row-between">
         <div>
-          <button className="link-back" onClick={() => setSelectedHouse(null)}>
-            <ArrowLeft size={15} /> Tất cả nhà
-          </button>
-          <h1>{selectedHouse.name}</h1>
-          <p>{selectedHouse.address}</p>
+          <h1>Nhà & phòng</h1>
+          <p>Danh sách tất cả các phòng đang quản lý</p>
         </div>
         <button
           className="btn-primary"
@@ -481,7 +378,7 @@ function NhaPhong({ houses, rooms, contracts, loadAll, notify }) {
       </header>
 
       <div className="room-grid">
-        {hRooms.map((room) => {
+        {rooms.map((room) => {
           const activeContract = contracts.find((c) => c.room_id === room.id && c.status === "active");
           const people = activeContract ? tenants.filter((t) => t.contract_id === activeContract.id) : [];
           return (
@@ -527,18 +424,20 @@ function NhaPhong({ houses, rooms, contracts, loadAll, notify }) {
                 >
                   <Pencil size={14} /> Sửa
                 </button>
+                <button className="btn-ghost-sm btn-ghost-danger" onClick={() => setDeleteRoom(room)}>
+                  <Trash2 size={14} /> Xóa
+                </button>
               </div>
             </div>
           );
         })}
-        {hRooms.length === 0 && (
-          <EmptyState icon={Home} title="Nhà này chưa có phòng" hint="Thêm phòng để bắt đầu quản lý" />
+        {rooms.length === 0 && (
+          <EmptyState icon={Home} title="Chưa có phòng nào" hint="Thêm phòng đầu tiên để bắt đầu quản lý" />
         )}
       </div>
 
       {showRoomModal && (
         <RoomFormModal
-          house={selectedHouse}
           room={editRoom}
           contracts={contracts}
           tenants={tenants}
@@ -551,82 +450,54 @@ function NhaPhong({ houses, rooms, contracts, loadAll, notify }) {
           notify={notify}
         />
       )}
+
+      {deleteRoom && (
+        <DeleteRoomModal
+          room={deleteRoom}
+          onClose={() => setDeleteRoom(null)}
+          onDeleted={() => {
+            setDeleteRoom(null);
+            loadAll();
+            notify("Đã xóa phòng");
+          }}
+          notify={notify}
+        />
+      )}
     </div>
   );
 }
 
-function HouseFormModal({ house, onClose, onSaved, notify }) {
-  const [name, setName] = useState(house?.name || "");
-  const [address, setAddress] = useState(house?.address || "");
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    if (!name.trim() || !address.trim()) {
-      notify("Vui lòng nhập tên nhà và địa chỉ", "error");
-      return;
-    }
-    setSaving(true);
-    const { error } = house
-      ? await supabase.from("houses").update({ name, address }).eq("id", house.id)
-      : await supabase.from("houses").insert({ name, address });
-    setSaving(false);
-    if (error) return notify(error.message, "error");
-    onSaved();
-  };
-
-  return (
-    <Modal title={house ? "Sửa thông tin nhà" : "Thêm nhà trọ"} onClose={onClose}>
-      <Field label="Tên nhà">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="VD: Nhà A" />
-      </Field>
-      <Field label="Địa chỉ">
-        <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Số nhà, đường, phường, quận" />
-      </Field>
-      <div className="modal-actions">
-        <button className="btn-secondary" onClick={onClose}>Hủy</button>
-        <button className="btn-primary" onClick={submit} disabled={saving}>
-          {saving ? "Đang lưu…" : house ? "Lưu thay đổi" : "Lưu nhà"}
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-function DeleteHouseModal({ house, roomCount, onClose, onDeleted, notify }) {
+function DeleteRoomModal({ room, onClose, onDeleted, notify }) {
   const [deleting, setDeleting] = useState(false);
 
   const submit = async () => {
     setDeleting(true);
-    const { error } = await supabase.from("houses").delete().eq("id", house.id);
+    const { error } = await supabase.from("rooms").delete().eq("id", room.id);
     setDeleting(false);
     if (error) return notify(error.message, "error");
     onDeleted();
   };
 
   return (
-    <Modal title="Xóa nhà trọ" onClose={onClose} width={460}>
+    <Modal title="Xóa phòng" onClose={onClose} width={460}>
       <p>
-        Bạn chắc chắn muốn xóa <strong>{house.name}</strong>?
+        Bạn chắc chắn muốn xóa phòng <strong>{room.room_number}</strong>?
       </p>
-      {roomCount > 0 ? (
-        <p className="muted small" style={{ marginTop: 8 }}>
-          Nhà này đang có {roomCount} phòng. Xóa nhà sẽ xóa toàn bộ phòng, hợp đồng, người thuê,
-          chỉ số điện nước và hóa đơn liên quan. Hành động này không thể hoàn tác.
-        </p>
-      ) : (
-        <p className="muted small" style={{ marginTop: 8 }}>Hành động này không thể hoàn tác.</p>
-      )}
+      <p className="muted small" style={{ marginTop: 8 }}>
+        Xóa phòng sẽ xóa toàn bộ hợp đồng, người thuê, chỉ số điện nước và hóa đơn liên quan đến
+        phòng này. Hành động này không thể hoàn tác.
+      </p>
       <div className="modal-actions">
         <button className="btn-secondary" onClick={onClose}>Hủy</button>
         <button className="btn-danger" onClick={submit} disabled={deleting}>
-          {deleting ? "Đang xóa…" : "Xóa nhà"}
+          {deleting ? "Đang xóa…" : "Xóa phòng"}
         </button>
       </div>
     </Modal>
   );
 }
 
-function RoomFormModal({ house, room, contracts, tenants, onClose, onSaved, notify }) {
+function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
   const [roomNumber, setRoomNumber] = useState(room?.room_number || "");
   const [floor, setFloor] = useState(room?.floor || "");
   const [area, setArea] = useState(room?.area || "");
@@ -678,7 +549,6 @@ function RoomFormModal({ house, room, contracts, tenants, onClose, onSaved, noti
     setSaving(true);
 
     const roomPayload = {
-      house_id: house.id,
       room_number: roomNumber,
       floor: floor || null,
       area: area ? Number(area) : null,
@@ -754,7 +624,7 @@ function RoomFormModal({ house, room, contracts, tenants, onClose, onSaved, noti
   };
 
   return (
-    <Modal title={room ? "Sửa thông tin phòng" : `Thêm phòng — ${house.name}`} onClose={onClose} width={620}>
+    <Modal title={room ? "Sửa thông tin phòng" : "Thêm phòng mới"} onClose={onClose} width={620}>
       <div className="field-grid-2">
         <Field label="Tên phòng">
           <input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} placeholder="P101" />
@@ -839,23 +709,21 @@ function RoomFormModal({ house, room, contracts, tenants, onClose, onSaved, noti
 // ============================================================
 // TAB: KHÁCH THUÊ
 // ============================================================
-function KhachThue({ houses, rooms, contracts, tenants, loadAll, notify }) {
+function KhachThue({ rooms, contracts, tenants, loadAll, notify }) {
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
 
   const rows = contracts
     .map((c) => {
       const room = rooms.find((r) => r.id === c.room_id);
-      const house = houses.find((h) => h.id === room?.house_id);
       const people = tenants.filter((t) => t.contract_id === c.id);
-      return { contract: c, room, house, people };
+      return { contract: c, room, people };
     })
     .filter((row) => {
       if (!search.trim()) return true;
       const s = search.toLowerCase();
       return (
         row.room?.room_number?.toLowerCase().includes(s) ||
-        row.house?.name?.toLowerCase().includes(s) ||
         row.people.some((p) => p.full_name.toLowerCase().includes(s))
       );
     });
@@ -875,18 +743,18 @@ function KhachThue({ houses, rooms, contracts, tenants, loadAll, notify }) {
       <div className="search-bar">
         <Search size={16} />
         <input
-          placeholder="Tìm theo tên khách, số phòng, tên nhà…"
+          placeholder="Tìm theo tên khách, số phòng…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
       <div className="contract-list">
-        {rows.map(({ contract, room, house, people }) => (
+        {rows.map(({ contract, room, people }) => (
           <div key={contract.id} className="contract-card">
             <div className="contract-card-head">
               <div>
-                <p className="contract-room">{house?.name} · Phòng {room?.room_number}</p>
+                <p className="contract-room">Phòng {room?.room_number}</p>
                 <p className="muted small">
                   Hợp đồng từ {fmtDate(contract.start_date)}
                   {contract.end_date ? ` đến ${fmtDate(contract.end_date)}` : ""}
@@ -916,7 +784,6 @@ function KhachThue({ houses, rooms, contracts, tenants, loadAll, notify }) {
 
       {showModal && (
         <ContractFormModal
-          houses={houses}
           rooms={rooms}
           onClose={() => setShowModal(false)}
           onSaved={() => {
@@ -931,8 +798,7 @@ function KhachThue({ houses, rooms, contracts, tenants, loadAll, notify }) {
   );
 }
 
-function ContractFormModal({ houses, rooms, onClose, onSaved, notify }) {
-  const [houseId, setHouseId] = useState(houses[0]?.id || "");
+function ContractFormModal({ rooms, onClose, onSaved, notify }) {
   const [roomId, setRoomId] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [deposit, setDeposit] = useState("");
@@ -940,7 +806,7 @@ function ContractFormModal({ houses, rooms, onClose, onSaved, notify }) {
   const [people, setPeople] = useState([{ full_name: "", phone: "", id_card: "", is_representative: true }]);
   const [saving, setSaving] = useState(false);
 
-  const availableRooms = rooms.filter((r) => r.house_id === houseId && r.status === "trong");
+  const availableRooms = rooms.filter((r) => r.status === "trong");
 
   useEffect(() => {
     const room = rooms.find((r) => r.id === roomId);
@@ -993,29 +859,14 @@ function ContractFormModal({ houses, rooms, onClose, onSaved, notify }) {
 
   return (
     <Modal title="Lập hợp đồng thuê mới" onClose={onClose} width={620}>
-      <div className="field-grid-2">
-        <Field label="Nhà">
-          <select
-            value={houseId}
-            onChange={(e) => {
-              setHouseId(e.target.value);
-              setRoomId("");
-            }}
-          >
-            {houses.map((h) => (
-              <option key={h.id} value={h.id}>{h.name}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Phòng trống">
-          <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-            <option value="">— Chọn phòng —</option>
-            {availableRooms.map((r) => (
-              <option key={r.id} value={r.id}>{r.room_number}</option>
-            ))}
-          </select>
-        </Field>
-      </div>
+      <Field label="Phòng trống">
+        <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+          <option value="">— Chọn phòng —</option>
+          {availableRooms.map((r) => (
+            <option key={r.id} value={r.id}>{r.room_number}</option>
+          ))}
+        </select>
+      </Field>
 
       <div className="field-grid-2">
         <Field label="Ngày bắt đầu">
@@ -1084,7 +935,7 @@ function ContractFormModal({ houses, rooms, onClose, onSaved, notify }) {
 // ============================================================
 // TAB: HÓA ĐƠN
 // ============================================================
-function HoaDon({ houses, rooms, invoices, loadAll, notify }) {
+function HoaDon({ rooms, invoices, loadAll, notify }) {
   const [showModal, setShowModal] = useState(false);
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
   const [filterYear, setFilterYear] = useState(THIS_YEAR);
@@ -1134,12 +985,11 @@ function HoaDon({ houses, rooms, invoices, loadAll, notify }) {
       <div className="invoice-list">
         {filtered.map((inv) => {
           const room = rooms.find((r) => r.id === inv.room_id);
-          const house = houses.find((h) => h.id === room?.house_id);
           return (
             <div key={inv.id} className="invoice-card">
               <div className="invoice-card-head">
                 <div>
-                  <p className="contract-room">{house?.name} · Phòng {room?.room_number}</p>
+                  <p className="contract-room">Phòng {room?.room_number}</p>
                   <p className="muted small">Tháng {inv.month}/{inv.year}</p>
                 </div>
                 <Badge status={inv.status} />
@@ -1175,7 +1025,6 @@ function HoaDon({ houses, rooms, invoices, loadAll, notify }) {
 
       {showModal && (
         <InvoiceFormModal
-          houses={houses}
           rooms={rooms}
           onClose={() => setShowModal(false)}
           onSaved={() => {
@@ -1190,8 +1039,7 @@ function HoaDon({ houses, rooms, invoices, loadAll, notify }) {
   );
 }
 
-function InvoiceFormModal({ houses, rooms, onClose, onSaved, notify }) {
-  const [houseId, setHouseId] = useState(houses[0]?.id || "");
+function InvoiceFormModal({ rooms, onClose, onSaved, notify }) {
   const [roomId, setRoomId] = useState("");
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(THIS_YEAR);
@@ -1203,7 +1051,7 @@ function InvoiceFormModal({ houses, rooms, onClose, onSaved, notify }) {
   const [otherNote, setOtherNote] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const roomsInHouse = rooms.filter((r) => r.house_id === houseId && r.status === "da_thue");
+  const occupiedRooms = rooms.filter((r) => r.status === "da_thue");
   const room = rooms.find((r) => r.id === roomId);
 
   const elecUsed = Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
@@ -1268,19 +1116,12 @@ function InvoiceFormModal({ houses, rooms, onClose, onSaved, notify }) {
 
   return (
     <Modal title="Tạo hóa đơn tháng" onClose={onClose} width={560}>
-      <div className="field-grid-2">
-        <Field label="Nhà">
-          <select value={houseId} onChange={(e) => { setHouseId(e.target.value); setRoomId(""); }}>
-            {houses.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Phòng">
-          <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-            <option value="">— Chọn phòng —</option>
-            {roomsInHouse.map((r) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
-          </select>
-        </Field>
-      </div>
+      <Field label="Phòng">
+        <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+          <option value="">— Chọn phòng —</option>
+          {occupiedRooms.map((r) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
+        </select>
+      </Field>
 
       <div className="field-grid-2">
         <Field label="Tháng">
@@ -1346,7 +1187,7 @@ function InvoiceFormModal({ houses, rooms, onClose, onSaved, notify }) {
 // ============================================================
 // TAB: THU CHI
 // ============================================================
-function ThuChi({ houses, rooms, invoices, expenses, loadAll, notify }) {
+function ThuChi({ rooms, invoices, expenses, loadAll, notify }) {
   const [showModal, setShowModal] = useState(false);
 
   const totalIncome = invoices
@@ -1446,7 +1287,6 @@ function ThuChi({ houses, rooms, invoices, expenses, loadAll, notify }) {
 
       {showModal && (
         <ExpenseFormModal
-          houses={houses}
           rooms={rooms}
           onClose={() => setShowModal(false)}
           onSaved={() => {
@@ -1461,8 +1301,7 @@ function ThuChi({ houses, rooms, invoices, expenses, loadAll, notify }) {
   );
 }
 
-function ExpenseFormModal({ houses, rooms, onClose, onSaved, notify }) {
-  const [houseId, setHouseId] = useState(houses[0]?.id || "");
+function ExpenseFormModal({ rooms, onClose, onSaved, notify }) {
   const [roomId, setRoomId] = useState("");
   const [category, setCategory] = useState("sua_chua");
   const [amount, setAmount] = useState("");
@@ -1474,7 +1313,6 @@ function ExpenseFormModal({ houses, rooms, onClose, onSaved, notify }) {
     if (!amount) return notify("Vui lòng nhập số tiền", "error");
     setSaving(true);
     const { error } = await supabase.from("expenses").insert({
-      house_id: houseId || null,
       room_id: roomId || null,
       category,
       amount: Number(amount),
@@ -1488,22 +1326,14 @@ function ExpenseFormModal({ houses, rooms, onClose, onSaved, notify }) {
 
   return (
     <Modal title="Thêm chi phí" onClose={onClose}>
-      <div className="field-grid-2">
-        <Field label="Nhà">
-          <select value={houseId} onChange={(e) => { setHouseId(e.target.value); setRoomId(""); }}>
-            <option value="">— Không gắn nhà —</option>
-            {houses.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Phòng (tùy chọn)">
-          <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-            <option value="">— Không gắn phòng —</option>
-            {rooms.filter((r) => r.house_id === houseId).map((r) => (
-              <option key={r.id} value={r.id}>{r.room_number}</option>
-            ))}
-          </select>
-        </Field>
-      </div>
+      <Field label="Phòng (tùy chọn)">
+        <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+          <option value="">— Không gắn phòng —</option>
+          {rooms.map((r) => (
+            <option key={r.id} value={r.id}>{r.room_number}</option>
+          ))}
+        </select>
+      </Field>
       <div className="field-grid-2">
         <Field label="Loại chi phí">
           <select value={category} onChange={(e) => setCategory(e.target.value)}>

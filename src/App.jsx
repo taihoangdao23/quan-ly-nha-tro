@@ -15,6 +15,7 @@ import {
   Circle,
   Trash2,
   Pencil,
+  History,
   TrendingUp,
   TrendingDown,
   AlertCircle,
@@ -111,6 +112,7 @@ export default function App() {
   const [tenants, setTenants] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [utilityReadings, setUtilityReadings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState([]);
 
@@ -122,13 +124,14 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [h, r, c, t, i, e] = await Promise.all([
+    const [h, r, c, t, i, e, u] = await Promise.all([
       supabase.from("houses").select("*").order("created_at"),
       supabase.from("rooms").select("*").order("room_number"),
       supabase.from("contracts").select("*").order("created_at", { ascending: false }),
       supabase.from("tenants").select("*"),
       supabase.from("invoices").select("*").order("year", { ascending: false }).order("month", { ascending: false }),
       supabase.from("expenses").select("*").order("expense_date", { ascending: false }),
+      supabase.from("utility_readings").select("*"),
     ]);
     if (h.error) notify("Không tải được dữ liệu nhà: " + h.error.message, "error");
     setHouses(h.data || []);
@@ -137,6 +140,7 @@ export default function App() {
     setTenants(t.data || []);
     setInvoices(i.data || []);
     setExpenses(e.data || []);
+    setUtilityReadings(u.data || []);
     setLoading(false);
   }, [notify]);
 
@@ -144,7 +148,7 @@ export default function App() {
     loadAll();
   }, [loadAll]);
 
-  const ctx = { houses, rooms, contracts, tenants, invoices, expenses, loadAll, notify };
+  const ctx = { houses, rooms, contracts, tenants, invoices, expenses, utilityReadings, loadAll, notify };
 
   const NAV = [
     { key: "tongquan", label: "Tổng quan", shortLabel: "Tổng quan", icon: Home },
@@ -354,10 +358,12 @@ function TongQuan({ rooms, contracts, invoices, expenses }) {
 // ============================================================
 // TAB: NHÀ & PHÒNG
 // ============================================================
-function NhaPhong({ rooms, contracts, tenants, loadAll, notify }) {
+function NhaPhong({ rooms, contracts, tenants, invoices, utilityReadings, loadAll, notify }) {
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [editRoom, setEditRoom] = useState(null);
   const [deleteRoom, setDeleteRoom] = useState(null);
+  const [invoiceRoom, setInvoiceRoom] = useState(null);
+  const [historyRoom, setHistoryRoom] = useState(null);
 
   return (
     <div className="page">
@@ -414,7 +420,13 @@ function NhaPhong({ rooms, contracts, tenants, loadAll, notify }) {
                   </div>
                 )}
               </div>
-              <div className="room-card-actions">
+              <div className="room-card-actions room-card-actions-wrap">
+                <button className="btn-ghost-sm" onClick={() => setInvoiceRoom(room)}>
+                  <Receipt size={14} /> Lên hóa đơn
+                </button>
+                <button className="btn-ghost-sm" onClick={() => setHistoryRoom(room)}>
+                  <History size={14} /> Lịch sử
+                </button>
                 <button
                   className="btn-ghost-sm"
                   onClick={() => {
@@ -463,6 +475,30 @@ function NhaPhong({ rooms, contracts, tenants, loadAll, notify }) {
           notify={notify}
         />
       )}
+
+      {invoiceRoom && (
+        <InvoiceFormModal
+          rooms={rooms}
+          presetRoomId={invoiceRoom.id}
+          utilityReadings={utilityReadings}
+          onClose={() => setInvoiceRoom(null)}
+          onSaved={() => {
+            setInvoiceRoom(null);
+            loadAll();
+            notify("Đã tạo hóa đơn");
+          }}
+          notify={notify}
+        />
+      )}
+
+      {historyRoom && (
+        <RoomHistoryModal
+          room={historyRoom}
+          invoices={invoices}
+          utilityReadings={utilityReadings}
+          onClose={() => setHistoryRoom(null)}
+        />
+      )}
     </div>
   );
 }
@@ -493,6 +529,56 @@ function DeleteRoomModal({ room, onClose, onDeleted, notify }) {
           {deleting ? "Đang xóa…" : "Xóa phòng"}
         </button>
       </div>
+    </Modal>
+  );
+}
+
+function RoomHistoryModal({ room, invoices, utilityReadings, onClose }) {
+  const rows = invoices
+    .filter((inv) => inv.room_id === room.id)
+    .sort((a, b) => b.year - a.year || b.month - a.month)
+    .map((inv) => {
+      const reading = utilityReadings.find((u) => u.id === inv.utility_reading_id)
+        || utilityReadings.find((u) => u.room_id === room.id && u.month === inv.month && u.year === inv.year);
+      return { inv, reading };
+    });
+
+  return (
+    <Modal title={`Lịch sử chỉ số — Phòng ${room.room_number}`} onClose={onClose} width={680}>
+      {rows.length === 0 ? (
+        <EmptyState icon={History} title="Chưa có lịch sử hóa đơn" hint="Tạo hóa đơn cho phòng này để bắt đầu ghi nhận" />
+      ) : (
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Tháng</th>
+                <th>Chỉ số điện</th>
+                <th>Điện tiêu thụ</th>
+                <th>Chỉ số nước</th>
+                <th>Nước tiêu thụ</th>
+                <th>Tổng tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ inv, reading }) => {
+                const elecUsed = reading ? Number(reading.electricity_new) - Number(reading.electricity_old) : null;
+                const waterUsed = reading ? Number(reading.water_new) - Number(reading.water_old) : null;
+                return (
+                  <tr key={inv.id}>
+                    <td>{inv.month}/{inv.year}</td>
+                    <td>{reading ? reading.electricity_new : "—"}</td>
+                    <td>{elecUsed != null ? `${elecUsed} kWh` : "—"}</td>
+                    <td>{reading ? reading.water_new : "—"}</td>
+                    <td>{waterUsed != null ? `${waterUsed} m³` : "—"}</td>
+                    <td><strong>{fmtVND(inv.total_amount)}</strong></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -966,7 +1052,7 @@ function ContractFormModal({ rooms, onClose, onSaved, notify }) {
 // ============================================================
 // TAB: HÓA ĐƠN
 // ============================================================
-function HoaDon({ rooms, invoices, loadAll, notify }) {
+function HoaDon({ rooms, invoices, utilityReadings, loadAll, notify }) {
   const [showModal, setShowModal] = useState(false);
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
   const [filterYear, setFilterYear] = useState(THIS_YEAR);
@@ -1057,6 +1143,7 @@ function HoaDon({ rooms, invoices, loadAll, notify }) {
       {showModal && (
         <InvoiceFormModal
           rooms={rooms}
+          utilityReadings={utilityReadings}
           onClose={() => setShowModal(false)}
           onSaved={() => {
             setShowModal(false);
@@ -1070,8 +1157,8 @@ function HoaDon({ rooms, invoices, loadAll, notify }) {
   );
 }
 
-function InvoiceFormModal({ rooms, onClose, onSaved, notify }) {
-  const [roomId, setRoomId] = useState("");
+function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSaved, notify }) {
+  const [roomId, setRoomId] = useState(presetRoomId || "");
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(THIS_YEAR);
   const [elecOld, setElecOld] = useState("");
@@ -1084,6 +1171,19 @@ function InvoiceFormModal({ rooms, onClose, onSaved, notify }) {
 
   const occupiedRooms = rooms.filter((r) => r.status === "da_thue");
   const room = rooms.find((r) => r.id === roomId);
+
+  // Tự điền sẵn chỉ số cũ = chỉ số mới của lần đọc gần nhất trước đó của phòng này
+  useEffect(() => {
+    if (!roomId || !utilityReadings) return;
+    const readingsOfRoom = utilityReadings
+      .filter((u) => u.room_id === roomId)
+      .sort((a, b) => b.year - a.year || b.month - a.month);
+    const latest = readingsOfRoom[0];
+    if (latest) {
+      setElecOld(String(latest.electricity_new));
+      setWaterOld(String(latest.water_new));
+    }
+  }, [roomId, utilityReadings]);
 
   const elecUsed = Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
   const waterUsed = Math.max(0, Number(waterNew || 0) - Number(waterOld || 0));
@@ -1534,6 +1634,7 @@ const CSS = `
 .house-mini-addr { font-size: 12px; color: var(--ink-400); margin: 2px 0 0; }
 
 /* ---------- TABLE ---------- */
+.table-scroll { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .table th { text-align: left; color: var(--ink-400); font-weight: 600; font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .table td { padding: 10px 10px; border-bottom: 1px solid var(--line); }
@@ -1582,6 +1683,7 @@ const CSS = `
 .room-card-body { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
 .room-card-tenants { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .room-card-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
+.room-card-actions-wrap { flex-wrap: wrap; justify-content: flex-start; gap: 4px; }
 .inline-icon { vertical-align: -2px; margin-right: 3px; }
 
 /* ---------- CONTRACTS / TENANTS ---------- */

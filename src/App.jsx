@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient";
+import html2canvas from "html2canvas";
 import {
   Home,
   Building2,
@@ -16,6 +17,8 @@ import {
   Trash2,
   Pencil,
   History,
+  Copy,
+  Download,
   TrendingUp,
   TrendingDown,
   AlertCircle,
@@ -30,6 +33,9 @@ const YEARS = [THIS_YEAR - 1, THIS_YEAR, THIS_YEAR + 1];
 
 const fmtVND = (n) =>
   (Number(n) || 0).toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " đ";
+
+// Làm tròn đến hàng nghìn: lẻ từ 500 trở lên thì tròn lên, dưới 500 thì tròn xuống
+const roundToThousand = (n) => Math.round(Number(n) / 1000) * 1000;
 
 const fmtDate = (d) => {
   if (!d) return "—";
@@ -1168,6 +1174,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
   const [otherAmount, setOtherAmount] = useState("");
   const [otherNote, setOtherNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [createdInvoice, setCreatedInvoice] = useState(null);
 
   const occupiedRooms = rooms.filter((r) => r.status === "da_thue");
   const room = rooms.find((r) => r.id === roomId);
@@ -1191,7 +1198,8 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
   const waterAmount = room ? waterUsed * Number(room.water_price) : 0;
   const rentAmount = room ? Number(room.rent_price) : 0;
   const trashAmount = room ? Number(room.trash_price) : 0;
-  const total = rentAmount + elecAmount + waterAmount + trashAmount + Number(otherAmount || 0);
+  const rawTotal = rentAmount + elecAmount + waterAmount + trashAmount + Number(otherAmount || 0);
+  const total = roundToThousand(rawTotal);
 
   const submit = async () => {
     if (!roomId) return notify("Vui lòng chọn phòng", "error");
@@ -1222,28 +1230,54 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
       return notify(rErr.message, "error");
     }
 
-    const { error: iErr } = await supabase.from("invoices").upsert(
-      {
-        room_id: roomId,
-        utility_reading_id: reading.id,
-        month,
-        year,
-        rent_amount: rentAmount,
-        electricity_amount: elecAmount,
-        water_amount: waterAmount,
-        trash_amount: trashAmount,
-        other_amount: Number(otherAmount) || 0,
-        other_note: otherNote || null,
-        total_amount: total,
-        status: "chua_thanh_toan",
-      },
-      { onConflict: "room_id,month,year" }
-    );
+    const { data: invoice, error: iErr } = await supabase
+      .from("invoices")
+      .upsert(
+        {
+          room_id: roomId,
+          utility_reading_id: reading.id,
+          month,
+          year,
+          rent_amount: rentAmount,
+          electricity_amount: elecAmount,
+          water_amount: waterAmount,
+          trash_amount: trashAmount,
+          other_amount: Number(otherAmount) || 0,
+          other_note: otherNote || null,
+          total_amount: total,
+          status: "chua_thanh_toan",
+        },
+        { onConflict: "room_id,month,year" }
+      )
+      .select()
+      .single();
 
     setSaving(false);
     if (iErr) return notify(iErr.message, "error");
-    onSaved();
+
+    // Thay vì đóng modal ngay, hiển thị hóa đơn vừa tạo để sao chép/tải ảnh
+    setCreatedInvoice({
+      ...invoice,
+      room_number: room?.room_number,
+      elec_old: Number(elecOld) || 0,
+      elec_new: Number(elecNew) || 0,
+      elec_used: elecUsed,
+      water_old: Number(waterOld) || 0,
+      water_new: Number(waterNew) || 0,
+      water_used: waterUsed,
+    });
   };
+
+  if (createdInvoice) {
+    return (
+      <InvoiceReceiptModal
+        invoice={createdInvoice}
+        onClose={() => {
+          onSaved();
+        }}
+      />
+    );
+  }
 
   return (
     <Modal title="Tạo hóa đơn tháng" onClose={onClose} width={560}>
@@ -1301,7 +1335,10 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
           {Number(otherAmount) > 0 && (
             <div className="row-between"><span className="muted">{otherNote || "Phụ thu khác"}</span><span>{fmtVND(otherAmount)}</span></div>
           )}
-          <div className="invoice-total row-between"><strong>Tổng</strong><strong>{fmtVND(total)}</strong></div>
+          {rawTotal !== total && (
+            <div className="row-between"><span className="muted small">Trước khi làm tròn</span><span className="muted small">{fmtVND(rawTotal)}</span></div>
+          )}
+          <div className="invoice-total row-between"><strong>Tổng (đã làm tròn)</strong><strong>{fmtVND(total)}</strong></div>
         </div>
       )}
 
@@ -1311,6 +1348,108 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
           {saving ? "Đang lưu…" : "Tạo hóa đơn"}
         </button>
       </div>
+    </Modal>
+  );
+}
+
+function InvoiceReceiptModal({ invoice, onClose }) {
+  const receiptRef = useRef(null);
+  const [working, setWorking] = useState(false);
+
+  const fileName = `hoa-don-${invoice.room_number}-${invoice.month}-${invoice.year}.png`;
+
+  const renderCanvas = async () => {
+    return html2canvas(receiptRef.current, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+    });
+  };
+
+  const handleDownload = async () => {
+    setWorking(true);
+    try {
+      const canvas = await renderCanvas();
+      const link = document.createElement("a");
+      link.download = fileName;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (e) {
+      console.error(e);
+    }
+    setWorking(false);
+  };
+
+  const handleCopy = async () => {
+    setWorking(true);
+    try {
+      const canvas = await renderCanvas();
+      canvas.toBlob(async (blob) => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        } catch (e) {
+          console.error(e);
+        }
+        setWorking(false);
+      });
+    } catch (e) {
+      console.error(e);
+      setWorking(false);
+    }
+  };
+
+  return (
+    <Modal title="Hóa đơn đã tạo" onClose={onClose} width={460}>
+      <div className="receipt-wrap" ref={receiptRef}>
+        <div className="receipt-head">
+          <p className="receipt-room">Phòng {invoice.room_number}</p>
+          <p className="receipt-month">Hóa đơn tháng {invoice.month}/{invoice.year}</p>
+        </div>
+
+        <div className="receipt-body">
+          <div className="row-between">
+            <span className="muted">Tiền phòng</span>
+            <span>{fmtVND(invoice.rent_amount)}</span>
+          </div>
+          <div className="row-between">
+            <span className="muted">
+              <Zap size={13} className="inline-icon" /> Điện ({invoice.elec_old} → {invoice.elec_new}, {invoice.elec_used} kWh)
+            </span>
+            <span>{fmtVND(invoice.electricity_amount)}</span>
+          </div>
+          <div className="row-between">
+            <span className="muted">
+              <Droplet size={13} className="inline-icon" /> Nước ({invoice.water_old} → {invoice.water_new}, {invoice.water_used} m³)
+            </span>
+            <span>{fmtVND(invoice.water_amount)}</span>
+          </div>
+          <div className="row-between">
+            <span className="muted">Tiền rác</span>
+            <span>{fmtVND(invoice.trash_amount)}</span>
+          </div>
+          {Number(invoice.other_amount) > 0 && (
+            <div className="row-between">
+              <span className="muted">{invoice.other_note || "Phụ thu khác"}</span>
+              <span>{fmtVND(invoice.other_amount)}</span>
+            </div>
+          )}
+          <div className="invoice-total row-between">
+            <strong>Tổng thanh toán</strong>
+            <strong>{fmtVND(invoice.total_amount)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="modal-actions receipt-actions">
+        <button className="btn-secondary" onClick={handleCopy} disabled={working}>
+          <Copy size={15} /> Sao chép ảnh
+        </button>
+        <button className="btn-secondary" onClick={handleDownload} disabled={working}>
+          <Download size={15} /> Tải ảnh xuống
+        </button>
+      </div>
+      <button className="btn-primary full-width" onClick={onClose}>
+        Xong
+      </button>
     </Modal>
   );
 }
@@ -1744,6 +1883,16 @@ const CSS = `
 .utility-section { background: var(--blue-50); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
 .utility-section .field-grid-2 { margin-top: 8px; }
 .invoice-preview { background: var(--grey-bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13.5px; display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------- RECEIPT (hóa đơn xuất ảnh) ---------- */
+.receipt-wrap { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+.receipt-head { text-align: center; border-bottom: 1px dashed var(--line); padding-bottom: 14px; margin-bottom: 14px; }
+.receipt-room { font-size: 18px; font-weight: 700; margin: 0; }
+.receipt-month { font-size: 13px; color: var(--ink-400); margin: 4px 0 0; }
+.receipt-body { display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; }
+.receipt-actions { margin-top: 16px; }
+.receipt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.receipt-actions button { justify-content: center; }
 .tenant-form-section { margin: 18px 0; }
 .tenant-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto auto; gap: 8px; align-items: center; margin-top: 8px; }
 .tenant-row input { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }

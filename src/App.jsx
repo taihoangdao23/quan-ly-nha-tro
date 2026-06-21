@@ -426,10 +426,12 @@ function NhaPhong({ rooms, contracts, tenants, invoices, utilityReadings, loadAl
                   </div>
                 )}
               </div>
-              <div className="room-card-actions room-card-actions-wrap">
-                <button className="btn-ghost-sm" onClick={() => setInvoiceRoom(room)}>
-                  <Receipt size={14} /> Lên hóa đơn
+              {room.status === "da_thue" && (
+                <button className="btn-invoice-highlight" onClick={() => setInvoiceRoom(room)}>
+                  <Receipt size={15} /> Lên hóa đơn tháng này
                 </button>
+              )}
+              <div className="room-card-actions room-card-actions-wrap">
                 <button className="btn-ghost-sm" onClick={() => setHistoryRoom(room)}>
                   <History size={14} /> Lịch sử
                 </button>
@@ -503,6 +505,8 @@ function NhaPhong({ rooms, contracts, tenants, invoices, utilityReadings, loadAl
           invoices={invoices}
           utilityReadings={utilityReadings}
           onClose={() => setHistoryRoom(null)}
+          onChanged={loadAll}
+          notify={notify}
         />
       )}
     </div>
@@ -539,7 +543,10 @@ function DeleteRoomModal({ room, onClose, onDeleted, notify }) {
   );
 }
 
-function RoomHistoryModal({ room, invoices, utilityReadings, onClose }) {
+function RoomHistoryModal({ room, invoices, utilityReadings, onClose, onChanged, notify }) {
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   const rows = invoices
     .filter((inv) => inv.room_id === room.id)
     .sort((a, b) => b.year - a.year || b.month - a.month)
@@ -549,8 +556,23 @@ function RoomHistoryModal({ room, invoices, utilityReadings, onClose }) {
       return { inv, reading };
     });
 
+  const doDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    const { inv, reading } = confirmDelete;
+    const { error: iErr } = await supabase.from("invoices").delete().eq("id", inv.id);
+    if (reading) {
+      await supabase.from("utility_readings").delete().eq("id", reading.id);
+    }
+    setDeleting(false);
+    setConfirmDelete(null);
+    if (iErr) return notify(iErr.message, "error");
+    notify("Đã xóa bản ghi tháng " + inv.month + "/" + inv.year);
+    onChanged();
+  };
+
   return (
-    <Modal title={`Lịch sử chỉ số — Phòng ${room.room_number}`} onClose={onClose} width={680}>
+    <Modal title={`Lịch sử chỉ số — Phòng ${room.room_number}`} onClose={onClose} width={720}>
       {rows.length === 0 ? (
         <EmptyState icon={History} title="Chưa có lịch sử hóa đơn" hint="Tạo hóa đơn cho phòng này để bắt đầu ghi nhận" />
       ) : (
@@ -564,6 +586,7 @@ function RoomHistoryModal({ room, invoices, utilityReadings, onClose }) {
                 <th>Chỉ số nước</th>
                 <th>Nước tiêu thụ</th>
                 <th>Tổng tiền</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -578,11 +601,31 @@ function RoomHistoryModal({ room, invoices, utilityReadings, onClose }) {
                     <td>{reading ? reading.water_new : "—"}</td>
                     <td>{waterUsed != null ? `${waterUsed} m³` : "—"}</td>
                     <td><strong>{fmtVND(inv.total_amount)}</strong></td>
+                    <td>
+                      <button className="icon-btn icon-btn-danger" onClick={() => setConfirmDelete({ inv, reading })}>
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="inline-confirm">
+          <p>
+            Xóa bản ghi tháng <strong>{confirmDelete.inv.month}/{confirmDelete.inv.year}</strong>?
+            Hành động này không thể hoàn tác.
+          </p>
+          <div className="inline-confirm-actions">
+            <button className="btn-secondary" onClick={() => setConfirmDelete(null)}>Hủy</button>
+            <button className="btn-danger" onClick={doDelete} disabled={deleting}>
+              {deleting ? "Đang xóa…" : "Xóa"}
+            </button>
+          </div>
         </div>
       )}
     </Modal>
@@ -1060,6 +1103,9 @@ function ContractFormModal({ rooms, onClose, onSaved, notify }) {
 // ============================================================
 function HoaDon({ rooms, invoices, utilityReadings, loadAll, notify }) {
   const [showModal, setShowModal] = useState(false);
+  const [editInvoice, setEditInvoice] = useState(null);
+  const [deleteInvoice, setDeleteInvoice] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
   const [filterYear, setFilterYear] = useState(THIS_YEAR);
 
@@ -1078,6 +1124,20 @@ function HoaDon({ rooms, invoices, utilityReadings, loadAll, notify }) {
     });
     loadAll();
     notify("Đã đánh dấu thanh toán");
+  };
+
+  const confirmDeleteInvoice = async () => {
+    if (!deleteInvoice) return;
+    setDeleting(true);
+    const { error } = await supabase.from("invoices").delete().eq("id", deleteInvoice.id);
+    if (deleteInvoice.utility_reading_id) {
+      await supabase.from("utility_readings").delete().eq("id", deleteInvoice.utility_reading_id);
+    }
+    setDeleting(false);
+    setDeleteInvoice(null);
+    if (error) return notify(error.message, "error");
+    loadAll();
+    notify("Đã xóa hóa đơn");
   };
 
   return (
@@ -1138,6 +1198,14 @@ function HoaDon({ rooms, invoices, utilityReadings, loadAll, notify }) {
               {inv.status === "da_thanh_toan" && (
                 <p className="muted small text-center">Đã thu ngày {fmtDate(inv.paid_date)}</p>
               )}
+              <div className="invoice-card-actions">
+                <button className="btn-ghost-sm" onClick={() => setEditInvoice(inv)}>
+                  <Pencil size={14} /> Sửa
+                </button>
+                <button className="btn-ghost-sm btn-ghost-danger" onClick={() => setDeleteInvoice(inv)}>
+                  <Trash2 size={14} /> Xóa
+                </button>
+              </div>
             </div>
           );
         })}
@@ -1159,20 +1227,56 @@ function HoaDon({ rooms, invoices, utilityReadings, loadAll, notify }) {
           notify={notify}
         />
       )}
+
+      {editInvoice && (
+        <InvoiceFormModal
+          rooms={rooms}
+          utilityReadings={utilityReadings}
+          existingInvoice={editInvoice}
+          onClose={() => setEditInvoice(null)}
+          onSaved={() => {
+            setEditInvoice(null);
+            loadAll();
+            notify("Đã cập nhật hóa đơn");
+          }}
+          notify={notify}
+        />
+      )}
+
+      {deleteInvoice && (
+        <Modal title="Xóa hóa đơn" onClose={() => setDeleteInvoice(null)} width={440}>
+          <p>
+            Xóa hóa đơn tháng <strong>{deleteInvoice.month}/{deleteInvoice.year}</strong> của phòng{" "}
+            <strong>{rooms.find((r) => r.id === deleteInvoice.room_id)?.room_number}</strong>?
+          </p>
+          <p className="muted small" style={{ marginTop: 8 }}>Hành động này không thể hoàn tác.</p>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={() => setDeleteInvoice(null)}>Hủy</button>
+            <button className="btn-danger" onClick={confirmDeleteInvoice} disabled={deleting}>
+              {deleting ? "Đang xóa…" : "Xóa hóa đơn"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
-function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSaved, notify }) {
-  const [roomId, setRoomId] = useState(presetRoomId || "");
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [year, setYear] = useState(THIS_YEAR);
-  const [elecOld, setElecOld] = useState("");
-  const [elecNew, setElecNew] = useState("");
-  const [waterOld, setWaterOld] = useState("");
-  const [waterNew, setWaterNew] = useState("");
-  const [otherAmount, setOtherAmount] = useState("");
-  const [otherNote, setOtherNote] = useState("");
+function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoice, onClose, onSaved, notify }) {
+  const isEdit = !!existingInvoice;
+  const existingReading = isEdit
+    ? utilityReadings?.find((u) => u.id === existingInvoice.utility_reading_id)
+    : null;
+
+  const [roomId, setRoomId] = useState(existingInvoice?.room_id || presetRoomId || "");
+  const [month, setMonth] = useState(existingInvoice?.month || new Date().getMonth() + 1);
+  const [year, setYear] = useState(existingInvoice?.year || THIS_YEAR);
+  const [elecOld, setElecOld] = useState(existingReading ? String(existingReading.electricity_old) : "");
+  const [elecNew, setElecNew] = useState(existingReading ? String(existingReading.electricity_new) : "");
+  const [waterOld, setWaterOld] = useState(existingReading ? String(existingReading.water_old) : "");
+  const [waterNew, setWaterNew] = useState(existingReading ? String(existingReading.water_new) : "");
+  const [otherAmount, setOtherAmount] = useState(existingInvoice?.other_amount || "");
+  const [otherNote, setOtherNote] = useState(existingInvoice?.other_note || "");
   const [saving, setSaving] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState(null);
 
@@ -1180,7 +1284,9 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
   const room = rooms.find((r) => r.id === roomId);
 
   // Tự điền sẵn chỉ số cũ = chỉ số mới của lần đọc gần nhất trước đó của phòng này
+  // (chỉ áp dụng khi tạo mới, không áp dụng khi đang sửa hóa đơn có sẵn)
   useEffect(() => {
+    if (isEdit) return;
     if (!roomId || !utilityReadings) return;
     const readingsOfRoom = utilityReadings
       .filter((u) => u.room_id === roomId)
@@ -1190,7 +1296,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
       setElecOld(String(latest.electricity_new));
       setWaterOld(String(latest.water_new));
     }
-  }, [roomId, utilityReadings]);
+  }, [roomId, utilityReadings, isEdit]);
 
   const elecUsed = Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
   const waterUsed = Math.max(0, Number(waterNew || 0) - Number(waterOld || 0));
@@ -1230,32 +1336,43 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
       return notify(rErr.message, "error");
     }
 
-    const { data: invoice, error: iErr } = await supabase
-      .from("invoices")
-      .upsert(
-        {
-          room_id: roomId,
-          utility_reading_id: reading.id,
-          month,
-          year,
-          rent_amount: rentAmount,
-          electricity_amount: elecAmount,
-          water_amount: waterAmount,
-          trash_amount: trashAmount,
-          other_amount: Number(otherAmount) || 0,
-          other_note: otherNote || null,
-          total_amount: total,
-          status: "chua_thanh_toan",
-        },
-        { onConflict: "room_id,month,year" }
-      )
-      .select()
-      .single();
+    const invoicePayload = {
+      room_id: roomId,
+      utility_reading_id: reading.id,
+      month,
+      year,
+      rent_amount: rentAmount,
+      electricity_amount: elecAmount,
+      water_amount: waterAmount,
+      trash_amount: trashAmount,
+      other_amount: Number(otherAmount) || 0,
+      other_note: otherNote || null,
+      total_amount: total,
+    };
+    if (!isEdit) invoicePayload.status = "chua_thanh_toan";
+
+    let invoiceQuery;
+    if (isEdit) {
+      invoiceQuery = supabase.from("invoices").update(invoicePayload).eq("id", existingInvoice.id).select().single();
+    } else {
+      invoiceQuery = supabase
+        .from("invoices")
+        .upsert(invoicePayload, { onConflict: "room_id,month,year" })
+        .select()
+        .single();
+    }
+    const { data: invoice, error: iErr } = await invoiceQuery;
 
     setSaving(false);
     if (iErr) return notify(iErr.message, "error");
 
-    // Thay vì đóng modal ngay, hiển thị hóa đơn vừa tạo để sao chép/tải ảnh
+    if (isEdit) {
+      // Sửa hóa đơn xong thì lưu luôn, không cần xem lại hóa đơn dạng ảnh
+      onSaved();
+      return;
+    }
+
+    // Tạo mới: hiển thị hóa đơn vừa tạo để sao chép/tải ảnh
     setCreatedInvoice({
       ...invoice,
       room_number: room?.room_number,
@@ -1280,24 +1397,36 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
   }
 
   return (
-    <Modal title="Tạo hóa đơn tháng" onClose={onClose} width={560}>
+    <Modal title={isEdit ? "Sửa hóa đơn" : "Tạo hóa đơn tháng"} onClose={onClose} width={560}>
       <Field label="Phòng">
-        <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-          <option value="">— Chọn phòng —</option>
-          {occupiedRooms.map((r) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
-        </select>
+        {isEdit ? (
+          <input value={room?.room_number || ""} disabled />
+        ) : (
+          <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+            <option value="">— Chọn phòng —</option>
+            {occupiedRooms.map((r) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
+          </select>
+        )}
       </Field>
 
       <div className="field-grid-2">
         <Field label="Tháng">
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-            {MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}
-          </select>
+          {isEdit ? (
+            <input value={`Tháng ${month}`} disabled />
+          ) : (
+            <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+              {MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}
+            </select>
+          )}
         </Field>
         <Field label="Năm">
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
+          {isEdit ? (
+            <input value={year} disabled />
+          ) : (
+            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
         </Field>
       </div>
 
@@ -1345,7 +1474,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, onClose, onSav
       <div className="modal-actions">
         <button className="btn-secondary" onClick={onClose}>Hủy</button>
         <button className="btn-primary" onClick={submit} disabled={saving}>
-          {saving ? "Đang lưu…" : "Tạo hóa đơn"}
+          {saving ? "Đang lưu…" : isEdit ? "Lưu thay đổi" : "Tạo hóa đơn"}
         </button>
       </div>
     </Modal>
@@ -1738,6 +1867,12 @@ const CSS = `
   cursor: pointer; padding: 6px; border-radius: 8px; display: inline-flex;
 }
 .icon-btn:hover { background: var(--grey-bg); color: var(--ink-900); }
+.icon-btn-danger:hover { background: var(--red-bg); color: var(--red); }
+.inline-confirm {
+  margin-top: 14px; padding: 14px; border-radius: 10px; background: var(--red-bg); border: 1px solid #fecaca;
+}
+.inline-confirm p { font-size: 13.5px; margin: 0 0 10px; color: var(--ink-900); }
+.inline-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---------- STAT CARDS ---------- */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
@@ -1823,6 +1958,14 @@ const CSS = `
 .room-card-tenants { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .room-card-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
 .room-card-actions-wrap { flex-wrap: wrap; justify-content: flex-start; gap: 4px; }
+.btn-invoice-highlight {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+  margin-top: 12px; padding: 10px 12px; border-radius: 10px; border: none;
+  background: linear-gradient(135deg, var(--blue-500), #4f9cf9); color: #fff;
+  font-size: 13.5px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37,99,235,0.25); transition: transform 0.12s, box-shadow 0.12s;
+}
+.btn-invoice-highlight:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(37,99,235,0.32); }
 .inline-icon { vertical-align: -2px; margin-right: 3px; }
 
 /* ---------- CONTRACTS / TENANTS ---------- */
@@ -1847,6 +1990,7 @@ const CSS = `
 .invoice-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
 .invoice-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .invoice-card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.invoice-card-actions { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .invoice-breakdown { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; margin-bottom: 6px; }
 .invoice-total { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; font-size: 14.5px; }
 .text-center { text-align: center; }
@@ -1879,6 +2023,7 @@ const CSS = `
   outline: none; background: #fff; color: var(--ink-900); font-family: inherit;
 }
 .field input:focus, .field select:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px var(--blue-100); }
+.field input:disabled { background: var(--grey-bg); color: var(--ink-600); cursor: not-allowed; }
 .field-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .utility-section { background: var(--blue-50); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
 .utility-section .field-grid-2 { margin-top: 8px; }

@@ -499,8 +499,6 @@ function DeleteRoomModal({ room, onClose, onDeleted, notify }) {
 
 function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
   const [roomNumber, setRoomNumber] = useState(room?.room_number || "");
-  const [floor, setFloor] = useState(room?.floor || "");
-  const [area, setArea] = useState(room?.area || "");
   const [rentPrice, setRentPrice] = useState(room?.rent_price || "");
   const [elecPrice, setElecPrice] = useState(room?.electricity_price || "");
   const [waterPrice, setWaterPrice] = useState(room?.water_price || "");
@@ -523,13 +521,17 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
           full_name: t.full_name,
           phone: t.phone || "",
           id_card: t.id_card || "",
+          residence_registration_date: t.residence_registration_date || "",
           is_representative: t.is_representative,
         }))
-      : [{ full_name: "", phone: "", id_card: "", is_representative: true }]
+      : [{ full_name: "", phone: "", id_card: "", residence_registration_date: "", is_representative: true }]
   );
 
   const addPerson = () =>
-    setPeople((p) => [...p, { full_name: "", phone: "", id_card: "", is_representative: false }]);
+    setPeople((p) => [
+      ...p,
+      { full_name: "", phone: "", id_card: "", residence_registration_date: "", is_representative: false },
+    ]);
   const removePerson = (idx) => setPeople((p) => p.filter((_, i) => i !== idx));
   const updatePerson = (idx, field, value) =>
     setPeople((p) =>
@@ -550,8 +552,6 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
 
     const roomPayload = {
       room_number: roomNumber,
-      floor: floor || null,
-      area: area ? Number(area) : null,
       rent_price: Number(rentPrice) || 0,
       electricity_price: Number(elecPrice) || 0,
       water_price: Number(waterPrice) || 0,
@@ -610,6 +610,7 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
         full_name: p.full_name,
         phone: p.phone || null,
         id_card: p.id_card || null,
+        residence_registration_date: p.residence_registration_date || null,
         is_representative: p.is_representative,
       }));
       const { error: tErr } = await supabase.from("tenants").insert(tenantRows);
@@ -625,16 +626,8 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
 
   return (
     <Modal title={room ? "Sửa thông tin phòng" : "Thêm phòng mới"} onClose={onClose} width={620}>
-      <div className="field-grid-2">
-        <Field label="Tên phòng">
-          <input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} placeholder="P101" />
-        </Field>
-        <Field label="Tầng">
-          <input value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="1" />
-        </Field>
-      </div>
-      <Field label="Diện tích (m²)">
-        <input type="number" value={area} onChange={(e) => setArea(e.target.value)} placeholder="20" />
+      <Field label="Tên phòng">
+        <input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} placeholder="P101" />
       </Field>
       <Field label="Giá thuê / tháng (đ)">
         <input type="number" value={rentPrice} onChange={(e) => setRentPrice(e.target.value)} placeholder="2500000" />
@@ -659,22 +652,39 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
           </button>
         </div>
         {people.map((p, idx) => (
-          <div key={idx} className="tenant-row">
-            <input
-              placeholder="Họ tên"
-              value={p.full_name}
-              onChange={(e) => updatePerson(idx, "full_name", e.target.value)}
-            />
-            <input
-              placeholder="SĐT"
-              value={p.phone}
-              onChange={(e) => updatePerson(idx, "phone", e.target.value)}
-            />
-            <input
-              placeholder="CCCD"
-              value={p.id_card}
-              onChange={(e) => updatePerson(idx, "id_card", e.target.value)}
-            />
+          <div key={idx} className="tenant-card">
+            <div className="tenant-card-row">
+              <input
+                placeholder="Họ tên"
+                value={p.full_name}
+                onChange={(e) => updatePerson(idx, "full_name", e.target.value)}
+              />
+              <input
+                placeholder="SĐT"
+                value={p.phone}
+                onChange={(e) => updatePerson(idx, "phone", e.target.value)}
+              />
+              {people.length > 1 && (
+                <button className="icon-btn" onClick={() => removePerson(idx)} type="button">
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            <div className="tenant-card-row">
+              <input
+                placeholder="CCCD"
+                value={p.id_card}
+                onChange={(e) => updatePerson(idx, "id_card", e.target.value)}
+              />
+              <div className="tenant-date-field">
+                <span className="tenant-date-label">Ngày đăng ký tạm trú</span>
+                <input
+                  type="date"
+                  value={p.residence_registration_date}
+                  onChange={(e) => updatePerson(idx, "residence_registration_date", e.target.value)}
+                />
+              </div>
+            </div>
             <label className="checkbox-inline">
               <input
                 type="radio"
@@ -684,11 +694,6 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
               />
               Chủ phòng
             </label>
-            {people.length > 1 && (
-              <button className="icon-btn" onClick={() => removePerson(idx)} type="button">
-                <Trash2 size={14} />
-              </button>
-            )}
           </div>
         ))}
         <p className="muted small" style={{ marginTop: 8 }}>
@@ -803,7 +808,9 @@ function ContractFormModal({ rooms, onClose, onSaved, notify }) {
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [deposit, setDeposit] = useState("");
   const [rentPrice, setRentPrice] = useState("");
-  const [people, setPeople] = useState([{ full_name: "", phone: "", id_card: "", is_representative: true }]);
+  const [people, setPeople] = useState([
+    { full_name: "", phone: "", id_card: "", residence_registration_date: "", is_representative: true },
+  ]);
   const [saving, setSaving] = useState(false);
 
   const availableRooms = rooms.filter((r) => r.status === "trong");
@@ -814,10 +821,20 @@ function ContractFormModal({ rooms, onClose, onSaved, notify }) {
   }, [roomId, rooms]);
 
   const addPerson = () =>
-    setPeople((p) => [...p, { full_name: "", phone: "", id_card: "", is_representative: false }]);
+    setPeople((p) => [
+      ...p,
+      { full_name: "", phone: "", id_card: "", residence_registration_date: "", is_representative: false },
+    ]);
   const removePerson = (idx) => setPeople((p) => p.filter((_, i) => i !== idx));
   const updatePerson = (idx, field, value) =>
-    setPeople((p) => p.map((per, i) => (i === idx ? { ...per, [field]: value } : per)));
+    setPeople((p) =>
+      p.map((per, i) => {
+        if (field === "is_representative" && value) {
+          return { ...per, is_representative: i === idx };
+        }
+        return i === idx ? { ...per, [field]: value } : per;
+      })
+    );
 
   const submit = async () => {
     if (!roomId) return notify("Vui lòng chọn phòng", "error");
@@ -847,6 +864,7 @@ function ContractFormModal({ rooms, onClose, onSaved, notify }) {
       full_name: p.full_name,
       phone: p.phone || null,
       id_card: p.id_card || null,
+      residence_registration_date: p.residence_registration_date || null,
       is_representative: p.is_representative,
     }));
     const { error: tErr } = await supabase.from("tenants").insert(tenantRows);
@@ -889,35 +907,48 @@ function ContractFormModal({ rooms, onClose, onSaved, notify }) {
           </button>
         </div>
         {people.map((p, idx) => (
-          <div key={idx} className="tenant-row">
-            <input
-              placeholder="Họ tên"
-              value={p.full_name}
-              onChange={(e) => updatePerson(idx, "full_name", e.target.value)}
-            />
-            <input
-              placeholder="SĐT"
-              value={p.phone}
-              onChange={(e) => updatePerson(idx, "phone", e.target.value)}
-            />
-            <input
-              placeholder="CCCD"
-              value={p.id_card}
-              onChange={(e) => updatePerson(idx, "id_card", e.target.value)}
-            />
+          <div key={idx} className="tenant-card">
+            <div className="tenant-card-row">
+              <input
+                placeholder="Họ tên"
+                value={p.full_name}
+                onChange={(e) => updatePerson(idx, "full_name", e.target.value)}
+              />
+              <input
+                placeholder="SĐT"
+                value={p.phone}
+                onChange={(e) => updatePerson(idx, "phone", e.target.value)}
+              />
+              {people.length > 1 && (
+                <button className="icon-btn" onClick={() => removePerson(idx)} type="button">
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            <div className="tenant-card-row">
+              <input
+                placeholder="CCCD"
+                value={p.id_card}
+                onChange={(e) => updatePerson(idx, "id_card", e.target.value)}
+              />
+              <div className="tenant-date-field">
+                <span className="tenant-date-label">Ngày đăng ký tạm trú</span>
+                <input
+                  type="date"
+                  value={p.residence_registration_date}
+                  onChange={(e) => updatePerson(idx, "residence_registration_date", e.target.value)}
+                />
+              </div>
+            </div>
             <label className="checkbox-inline">
               <input
-                type="checkbox"
+                type="radio"
+                name="contract-form-representative"
                 checked={p.is_representative}
                 onChange={(e) => updatePerson(idx, "is_representative", e.target.checked)}
               />
               Đại diện
             </label>
-            {people.length > 1 && (
-              <button className="icon-btn" onClick={() => removePerson(idx)} type="button">
-                <Trash2 size={14} />
-              </button>
-            )}
           </div>
         ))}
       </div>
@@ -1614,6 +1645,17 @@ const CSS = `
 .tenant-form-section { margin: 18px 0; }
 .tenant-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto auto; gap: 8px; align-items: center; margin-top: 8px; }
 .tenant-row input { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.tenant-card {
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; background: #fafbfc;
+}
+.tenant-card-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.tenant-card-row:last-of-type { margin-bottom: 10px; }
+.tenant-card-row input {
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; flex: 1; min-width: 0;
+}
+.tenant-date-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.tenant-date-label { font-size: 11px; color: var(--ink-400); font-weight: 600; }
+.tenant-date-field input { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .checkbox-inline { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-600); white-space: nowrap; }
 
 /* ---------- EMPTY STATE ---------- */

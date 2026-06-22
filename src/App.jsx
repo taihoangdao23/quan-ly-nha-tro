@@ -1314,8 +1314,63 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     }
   }, [roomId, utilityReadings, isEdit]);
 
-  const elecUsed = Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
-  const waterUsed = Math.max(0, Number(waterNew || 0) - Number(waterOld || 0));
+
+
+
+
+
+const elecUsed = Math.max(
+  0,
+  Number(elecNew || 0) - Number(elecOld || 0)
+);
+
+const roomB1 = rooms.find((r) => r.room_number === "B1");
+const roomB2 = rooms.find((r) => r.room_number === "B2");
+
+const readingB1 = utilityReadings.find(
+  (u) =>
+    u.room_id === roomB1?.id &&
+    Number(u.month) === Number(month) &&
+    Number(u.year) === Number(year)
+);
+
+const readingB2 = utilityReadings.find(
+  (u) =>
+    u.room_id === roomB2?.id &&
+    Number(u.month) === Number(month) &&
+    Number(u.year) === Number(year)
+);
+
+const waterB1Used = readingB1
+  ? Number(readingB1.water_new) - Number(readingB1.water_old)
+  : 0;
+
+const waterB2Used = readingB2
+  ? Number(readingB2.water_new) - Number(readingB2.water_old)
+  : 0;
+
+const waterB1B2Total = waterB1Used + waterB2Used;
+
+const waterUsed =
+  room?.room_number === "B3-Hải"
+    ? Math.max(
+        0,
+        Number(waterNew || 0) -
+        Number(waterOld || 0) -
+        waterB1B2Total
+      )
+    : Math.max(
+        0,
+        Number(waterNew || 0) - Number(waterOld || 0)
+      );
+
+
+
+
+
+
+
+
   const elecAmount = room ? elecUsed * Number(room.electricity_price) : 0;
   const waterAmount = room ? waterUsed * Number(room.water_price) : 0;
   const rentAmount = room ? Number(room.rent_price) : 0;

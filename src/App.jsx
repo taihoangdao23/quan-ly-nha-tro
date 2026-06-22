@@ -1416,88 +1416,90 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
 
   return (
     <Modal title={isEdit ? "Sửa hóa đơn" : "Tạo hóa đơn tháng"} onClose={onClose} width={560}>
-      <Field label="Phòng">
-        {isEdit ? (
-          <input value={room?.room_number || ""} disabled />
-        ) : (
-          <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-            <option value="">— Chọn phòng —</option>
-            {occupiedRooms.map((r) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
-          </select>
+      <div className="modal-form">
+        <Field label="Phòng">
+          {isEdit ? (
+            <input value={room?.room_number || ""} disabled />
+          ) : (
+            <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+              <option value="">— Chọn phòng —</option>
+              {occupiedRooms.map((r) => <option key={r.id} value={r.id}>{r.room_number}</option>)}
+            </select>
+          )}
+        </Field>
+
+        <div className="field-grid-2">
+          <Field label="Tháng">
+            {isEdit ? (
+              <input value={`Tháng ${month}`} disabled />
+            ) : (
+              <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+                {MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}
+              </select>
+            )}
+          </Field>
+          <Field label="Năm">
+            {isEdit ? (
+              <input value={year} disabled />
+            ) : (
+              <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+          </Field>
+        </div>
+
+        {!isB3 && (
+          <div className="utility-section">
+            <p className="field-label"><Zap size={14} className="inline-icon" /> Chỉ số điện (kWh)</p>
+            <div className="field-grid-2">
+              <Field label="Số cũ"><input type="number" value={elecOld} onChange={(e) => setElecOld(e.target.value)} placeholder="0" /></Field>
+              <Field label="Số mới"><input type="number" value={elecNew} onChange={(e) => setElecNew(e.target.value)} placeholder="0" /></Field>
+            </div>
+          </div>
         )}
-      </Field>
 
-      <div className="field-grid-2">
-        <Field label="Tháng">
-          {isEdit ? (
-            <input value={`Tháng ${month}`} disabled />
-          ) : (
-            <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-              {MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}
-            </select>
-          )}
-        </Field>
-        <Field label="Năm">
-          {isEdit ? (
-            <input value={year} disabled />
-          ) : (
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-          )}
-        </Field>
-      </div>
-
-      {!isB3 && (
         <div className="utility-section">
-          <p className="field-label"><Zap size={14} className="inline-icon" /> Chỉ số điện (kWh)</p>
+          <p className="field-label"><Droplet size={14} className="inline-icon" /> Chỉ số nước (m³)</p>
           <div className="field-grid-2">
-            <Field label="Số cũ"><input type="number" value={elecOld} onChange={(e) => setElecOld(e.target.value)} /></Field>
-            <Field label="Số mới"><input type="number" value={elecNew} onChange={(e) => setElecNew(e.target.value)} /></Field>
+            <Field label="Số cũ"><input type="number" value={waterOld} onChange={(e) => setWaterOld(e.target.value)} placeholder="0" /></Field>
+            <Field label="Số mới"><input type="number" value={waterNew} onChange={(e) => setWaterNew(e.target.value)} placeholder="0" /></Field>
           </div>
         </div>
-      )}
 
-      <div className="utility-section">
-        <p className="field-label"><Droplet size={14} className="inline-icon" /> Chỉ số nước (m³)</p>
         <div className="field-grid-2">
-          <Field label="Số cũ"><input type="number" value={waterOld} onChange={(e) => setWaterOld(e.target.value)} /></Field>
-          <Field label="Số mới"><input type="number" value={waterNew} onChange={(e) => setWaterNew(e.target.value)} /></Field>
+          <Field label="Phụ thu khác (đ)">
+            <input type="number" value={otherAmount} onChange={(e) => setOtherAmount(e.target.value)} placeholder="0" />
+          </Field>
+          <Field label="Ghi chú phụ thu">
+            <input value={otherNote} onChange={(e) => setOtherNote(e.target.value)} placeholder="VD: internet, sửa chữa" />
+          </Field>
         </div>
-      </div>
 
-      <div className="field-grid-2">
-        <Field label="Phụ thu khác (đ)">
-          <input type="number" value={otherAmount} onChange={(e) => setOtherAmount(e.target.value)} placeholder="0" />
-        </Field>
-        <Field label="Ghi chú phụ thu">
-          <input value={otherNote} onChange={(e) => setOtherNote(e.target.value)} placeholder="VD: internet, sửa chữa" />
-        </Field>
-      </div>
+        {room && (
+          <div className="invoice-preview">
+            <div className="row-between"><span className="muted">Tiền phòng</span><span>{fmtVND(rentAmount)}</span></div>
+            {!isB3 && (
+              <div className="row-between"><span className="muted">Điện ({elecUsed} kWh)</span><span>{fmtVND(elecAmount)}</span></div>
+            )}
+            <div className="row-between"><span className="muted">Nước ({waterUsed} m³)</span><span>{fmtVND(waterAmount)}</span></div>
+            <div className="row-between"><span className="muted">Tiền rác</span><span>{fmtVND(trashAmount)}</span></div>
+            {Number(otherAmount) > 0 && (
+              <div className="row-between"><span className="muted">{otherNote || "Phụ thu khác"}</span><span>{fmtVND(otherAmount)}</span></div>
+            )}
+            {rawTotal !== total && (
+              <div className="row-between"><span className="muted small">Trước khi làm tròn</span><span className="muted small">{fmtVND(rawTotal)}</span></div>
+            )}
+            <div className="invoice-total row-between"><strong>Tổng (đã làm tròn)</strong><strong>{fmtVND(total)}</strong></div>
+          </div>
+        )}
 
-      {room && (
-        <div className="invoice-preview">
-          <div className="row-between"><span className="muted">Tiền phòng</span><span>{fmtVND(rentAmount)}</span></div>
-          {!isB3 && (
-            <div className="row-between"><span className="muted">Điện ({elecUsed} kWh)</span><span>{fmtVND(elecAmount)}</span></div>
-          )}
-          <div className="row-between"><span className="muted">Nước ({waterUsed} m³)</span><span>{fmtVND(waterAmount)}</span></div>
-          <div className="row-between"><span className="muted">Tiền rác</span><span>{fmtVND(trashAmount)}</span></div>
-          {Number(otherAmount) > 0 && (
-            <div className="row-between"><span className="muted">{otherNote || "Phụ thu khác"}</span><span>{fmtVND(otherAmount)}</span></div>
-          )}
-          {rawTotal !== total && (
-            <div className="row-between"><span className="muted small">Trước khi làm tròn</span><span className="muted small">{fmtVND(rawTotal)}</span></div>
-          )}
-          <div className="invoice-total row-between"><strong>Tổng (đã làm tròn)</strong><strong>{fmtVND(total)}</strong></div>
+        <div className="modal-actions">
+          <button className="btn-secondary" onClick={onClose}>Hủy</button>
+          <button className="btn-primary" onClick={submit} disabled={saving}>
+            {saving ? "Đang lưu…" : isEdit ? "Lưu thay đổi" : "Tạo hóa đơn"}
+          </button>
         </div>
-      )}
-
-      <div className="modal-actions">
-        <button className="btn-secondary" onClick={onClose}>Hủy</button>
-        <button className="btn-primary" onClick={submit} disabled={saving}>
-          {saving ? "Đang lưu…" : isEdit ? "Lưu thay đổi" : "Tạo hóa đơn"}
-        </button>
       </div>
     </Modal>
   );
@@ -1605,25 +1607,21 @@ function InvoiceReceiptModal({ invoice, onClose }) {
 }
 
 // ============================================================
-// TAB: DANH SÁCH THU (CHỈ 3 CỘT)
+// TAB: DANH SÁCH THU
 // ============================================================
 function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(THIS_YEAR);
   const [searchText, setSearchText] = useState("");
 
-  // Lấy danh sách phòng đã thuê
   const occupiedRooms = rooms.filter((r) => r.status === "da_thue");
 
-  // Tạo dữ liệu cho bảng
   const tableData = useMemo(() => {
     return occupiedRooms.map((room) => {
-      // Tìm hợp đồng active của phòng
       const activeContract = contracts.find(
         (c) => c.room_id === room.id && c.status === "active"
       );
       
-      // Tìm người đại diện
       let representative = null;
       if (activeContract) {
         const reps = tenants.filter(
@@ -1632,7 +1630,6 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
         if (reps.length > 0) {
           representative = reps[0];
         } else {
-          // Nếu không có đại diện, lấy người đầu tiên
           const allTenants = tenants.filter((t) => t.contract_id === activeContract.id);
           if (allTenants.length > 0) {
             representative = allTenants[0];
@@ -1640,7 +1637,6 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
         }
       }
 
-      // Tìm hóa đơn của tháng được chọn
       const invoice = invoices.find(
         (i) => i.room_id === room.id && i.month === selectedMonth && i.year === selectedYear
       );
@@ -1655,7 +1651,6 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
     });
   }, [occupiedRooms, contracts, tenants, invoices, selectedMonth, selectedYear]);
 
-  // Lọc theo tìm kiếm
   const filteredData = useMemo(() => {
     if (!searchText.trim()) return tableData;
     const search = searchText.toLowerCase().trim();
@@ -1666,10 +1661,8 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
     );
   }, [tableData, searchText]);
 
-  // Tính tổng tiền
   const totalAmount = filteredData.reduce((sum, item) => sum + Number(item.totalAmount), 0);
 
-  // Xuất Excel (đơn giản)
   const exportToCSV = () => {
     if (filteredData.length === 0) return notify("Không có dữ liệu để xuất", "error");
     
@@ -1734,7 +1727,6 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
         </div>
       </div>
 
-      {/* Thống kê nhanh */}
       <div className="stat-grid stat-grid-3" style={{ marginBottom: 16 }}>
         <div className="stat-card">
           <div className="stat-icon stat-icon-blue"><Receipt size={18} /></div>
@@ -1759,7 +1751,6 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
         </div>
       </div>
 
-      {/* Bảng danh sách - CHỈ 3 CỘT */}
       <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
         <div className="table-scroll">
           <table className="table">
@@ -1809,7 +1800,6 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
         </div>
       </div>
 
-      {/* Hướng dẫn */}
       <div className="muted small" style={{ marginTop: 12, padding: "0 4px" }}>
         💡 <strong>Hướng dẫn:</strong> Chọn tháng/năm để xem danh sách thu. 
         Bấm nút "Xuất Excel" để tải file CSV.
@@ -2232,14 +2222,15 @@ const CSS = `
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--line); }
 .modal-head h3 { font-size: 16px; margin: 0; }
 .modal-body { padding: 20px 22px; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
 /* ---------- FORM ---------- */
-.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.modal-form { width: 100%; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; width: 100%; }
 .field-label { font-size: 12.5px; font-weight: 600; color: var(--ink-600); display: flex; align-items: center; }
 .field input, .field select {
   border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; font-size: 14px;
   outline: none; background: #fff; color: var(--ink-900); font-family: inherit;
+  width: 100%; box-sizing: border-box;
 }
 .field input:focus, .field select:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px var(--blue-100); }
 .field input:disabled { background: var(--grey-bg); color: var(--ink-600); cursor: not-allowed; }
@@ -2247,6 +2238,7 @@ const CSS = `
 .utility-section { background: var(--blue-50); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
 .utility-section .field-grid-2 { margin-top: 8px; }
 .invoice-preview { background: var(--grey-bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13.5px; display: flex; flex-direction: column; gap: 6px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
 /* ---------- RECEIPT ---------- */
 .receipt-wrap { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
@@ -2304,14 +2296,25 @@ const CSS = `
 .bottom-nav-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .bottom-nav-item.active { color: var(--blue-600); }
 
+/* ---------- RESPONSIVE MOBILE ---------- */
 @media (max-width: 1024px) {
   .sidebar { display: none; }
   .main { padding: 20px; padding-bottom: 90px; }
   .two-col, .house-grid, .room-grid, .invoice-list, .stat-grid { grid-template-columns: 1fr; }
   .bottom-nav { display: flex; }
+  
+  /* Mobile form fixes */
+  .modal-panel { max-width: 100% !important; margin: 10px; }
+  .modal-body { padding: 16px; }
+  .field-grid-2 { grid-template-columns: 1fr; }
+  .field input, .field select { font-size: 16px; padding: 10px 12px; }
+  .modal-actions { flex-wrap: wrap; }
+  .modal-actions button { flex: 1; min-width: 120px; }
+  .utility-section { padding: 10px; }
+  .invoice-preview { font-size: 13px; padding: 10px; }
 }
 `;
 
 // ============================================================
-// EXPORT DEFAULT - QUAN TRỌNG: PHẢI CÓ DÒNG NÀY
+// EXPORT DEFAULT
 // ============================================================

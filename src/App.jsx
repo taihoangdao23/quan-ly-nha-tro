@@ -587,9 +587,10 @@ function RoomHistoryModal({ room, invoices, utilityReadings, onClose, onChanged,
   };
 
   const isB3 = room.room_number?.toUpperCase().trim() === "B3";
+  const isP2P3 = room.room_number?.toUpperCase().replace(/\s/g, "") === "P2+P3";
 
   return (
-    <Modal title={`Lịch sử chỉ số — Phòng ${room.room_number}`} onClose={onClose} width={720}>
+    <Modal title={`Lịch sử chỉ số — Phòng ${room.room_number}`} onClose={onClose} width={isP2P3 ? 900 : 720}>
       {rows.length === 0 ? (
         <EmptyState icon={History} title="Chưa có lịch sử hóa đơn" hint="Tạo hóa đơn cho phòng này để bắt đầu ghi nhận" />
       ) : (
@@ -598,33 +599,41 @@ function RoomHistoryModal({ room, invoices, utilityReadings, onClose, onChanged,
             <thead>
               <tr>
                 <th>Tháng</th>
-                {!isB3 && (
+                {isP2P3 ? (
                   <>
-                    <th>Chỉ số điện</th>
-                    <th>Điện tiêu thụ</th>
+                    <th>Điện P2</th>
+                    <th>Nước P2</th>
+                    <th>Điện P3</th>
+                    <th>Nước P3</th>
+                  </>
+                ) : (
+                  <>
+                    {!isB3 && <th>Chỉ số điện</th>}
+                    <th>Chỉ số nước</th>
                   </>
                 )}
-                <th>Chỉ số nước</th>
-                <th>Nước tiêu thụ</th>
                 <th>Tổng tiền</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.map(({ inv, reading }) => {
-                const elecUsed = reading && !isB3 ? Number(reading.electricity_new) - Number(reading.electricity_old) : null;
-                const waterUsed = reading ? Number(reading.water_new) - Number(reading.water_old) : null;
                 return (
                   <tr key={inv.id}>
                     <td>{inv.month}/{inv.year}</td>
-                    {!isB3 && (
+                    {isP2P3 ? (
                       <>
-                        <td>{reading ? reading.electricity_new : "—"}</td>
-                        <td>{elecUsed != null ? `${elecUsed} kWh` : "—"}</td>
+                        <td>{reading ? `${reading.p2_electricity_new || 0}` : "—"}</td>
+                        <td>{reading ? `${reading.p2_water_new || 0}` : "—"}</td>
+                        <td>{reading ? `${reading.p3_electricity_new || 0}` : "—"}</td>
+                        <td>{reading ? `${reading.p3_water_new || 0}` : "—"}</td>
+                      </>
+                    ) : (
+                      <>
+                        {!isB3 && <td>{reading ? reading.electricity_new : "—"}</td>}
+                        <td>{reading ? reading.water_new : "—"}</td>
                       </>
                     )}
-                    <td>{reading ? reading.water_new : "—"}</td>
-                    <td>{waterUsed != null ? `${waterUsed} m³` : "—"}</td>
                     <td><strong>{fmtVND(inv.total_amount)}</strong></td>
                     <td>
                       <button className="icon-btn icon-btn-danger" onClick={() => setConfirmDelete({ inv, reading })}>
@@ -1188,6 +1197,7 @@ function HoaDon({ rooms, invoices, utilityReadings, loadAll, notify }) {
         {filtered.map((inv) => {
           const room = rooms.find((r) => r.id === inv.room_id);
           const isB3 = room?.room_number?.toUpperCase().trim() === "B3";
+          const isP2P3 = room?.room_number?.toUpperCase().replace(/\s/g, "") === "P2+P3";
           return (
             <div key={inv.id} className="invoice-card">
               <div className="invoice-card-head">
@@ -1199,10 +1209,20 @@ function HoaDon({ rooms, invoices, utilityReadings, loadAll, notify }) {
               </div>
               <div className="invoice-breakdown">
                 <div className="row-between"><span className="muted">Tiền phòng</span><span>{fmtVND(inv.rent_amount)}</span></div>
-                {!isB3 && (
+                {!isB3 && !isP2P3 && (
                   <div className="row-between"><span className="muted"><Zap size={13} className="inline-icon" /> Điện</span><span>{fmtVND(inv.electricity_amount)}</span></div>
                 )}
-                <div className="row-between"><span className="muted"><Droplet size={13} className="inline-icon" /> Nước</span><span>{fmtVND(inv.water_amount)}</span></div>
+                {isP2P3 && (
+                  <>
+                    <div className="row-between"><span className="muted"><Zap size={13} className="inline-icon" /> Điện P2</span><span>{fmtVND(inv.electricity_amount)}</span></div>
+                    <div className="row-between"><span className="muted"><Droplet size={13} className="inline-icon" /> Nước P2</span><span>{fmtVND(inv.water_amount)}</span></div>
+                    <div className="row-between"><span className="muted"><Zap size={13} className="inline-icon" /> Điện P3</span><span>{fmtVND(inv.p3_electricity_amount || 0)}</span></div>
+                    <div className="row-between"><span className="muted"><Droplet size={13} className="inline-icon" /> Nước P3</span><span>{fmtVND(inv.p3_water_amount || 0)}</span></div>
+                  </>
+                )}
+                {!isP2P3 && (
+                  <div className="row-between"><span className="muted"><Droplet size={13} className="inline-icon" /> Nước</span><span>{fmtVND(inv.water_amount)}</span></div>
+                )}
                 <div className="row-between"><span className="muted">Tiền rác</span><span>{fmtVND(inv.trash_amount)}</span></div>
                 {Number(inv.other_amount) > 0 && (
                   <div className="row-between"><span className="muted">{inv.other_note || "Khác"}</span><span>{fmtVND(inv.other_amount)}</span></div>
@@ -1293,23 +1313,37 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
   const [roomId, setRoomId] = useState(existingInvoice?.room_id || presetRoomId || "");
   const [month, setMonth] = useState(existingInvoice?.month || new Date().getMonth() + 1);
   const [year, setYear] = useState(existingInvoice?.year || THIS_YEAR);
+
+  // State cho phòng thường và B3
   const [elecOld, setElecOld] = useState(existingReading ? String(existingReading.electricity_old) : "");
   const [elecNew, setElecNew] = useState(existingReading ? String(existingReading.electricity_new) : "");
   const [waterOld, setWaterOld] = useState(existingReading ? String(existingReading.water_old) : "");
   const [waterNew, setWaterNew] = useState(existingReading ? String(existingReading.water_new) : "");
+
+  // State cho P2+P3
+  const [p2ElecOld, setP2ElecOld] = useState(existingReading ? String(existingReading.p2_electricity_old || "") : "");
+  const [p2ElecNew, setP2ElecNew] = useState(existingReading ? String(existingReading.p2_electricity_new || "") : "");
+  const [p2WaterOld, setP2WaterOld] = useState(existingReading ? String(existingReading.p2_water_old || "") : "");
+  const [p2WaterNew, setP2WaterNew] = useState(existingReading ? String(existingReading.p2_water_new || "") : "");
+  const [p3ElecOld, setP3ElecOld] = useState(existingReading ? String(existingReading.p3_electricity_old || "") : "");
+  const [p3ElecNew, setP3ElecNew] = useState(existingReading ? String(existingReading.p3_electricity_new || "") : "");
+  const [p3WaterOld, setP3WaterOld] = useState(existingReading ? String(existingReading.p3_water_old || "") : "");
+  const [p3WaterNew, setP3WaterNew] = useState(existingReading ? String(existingReading.p3_water_new || "") : "");
+
   const [otherAmount, setOtherAmount] = useState(existingInvoice?.other_amount || "");
   const [otherNote, setOtherNote] = useState(existingInvoice?.other_note || "");
   const [saving, setSaving] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState(null);
 
-  // State cho tổng nước B1+B2 (người dùng tự nhập)
+  // State cho B3
   const [b1b2WaterInput, setB1b2WaterInput] = useState("");
 
   const occupiedRooms = rooms.filter((r) => r.status === "da_thue");
   const room = rooms.find((r) => r.id === roomId);
   const isB3 = room?.room_number?.toUpperCase().trim() === "B3";
+  const isP2P3 = room?.room_number?.toUpperCase().replace(/\s/g, "") === "P2+P3";
 
-  // Tự động tính tổng nước B1+B2 từ DB (để hiển thị gợi ý)
+  // Tự động tính tổng nước B1+B2 từ DB
   const b1b2WaterAutoTotal = useMemo(() => {
     if (!isB3 || !utilityReadings || !month || !year) return 0;
     const b1 = rooms.find((r) => r.room_number?.toUpperCase().trim() === "B1");
@@ -1325,21 +1359,19 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     return total;
   }, [isB3, utilityReadings, month, year, rooms]);
 
-  // Khi chọn phòng B3 và có dữ liệu tự động, gợi ý sẵn vào input (chỉ khi chưa có giá trị)
+  // Gợi ý B1+B2 cho B3
   useEffect(() => {
     if (isB3 && b1b2WaterAutoTotal > 0 && !b1b2WaterInput) {
       setB1b2WaterInput(String(b1b2WaterAutoTotal));
     }
   }, [isB3, b1b2WaterAutoTotal, b1b2WaterInput]);
 
-  // Khi đổi phòng (không còn là B3), reset input
+  // Reset khi đổi phòng
   useEffect(() => {
-    if (!isB3) {
-      setB1b2WaterInput("");
-    }
+    if (!isB3) setB1b2WaterInput("");
   }, [isB3]);
 
-  // Tự điền sẵn chỉ số cũ = chỉ số mới của lần đọc gần nhất trước đó của phòng này
+  // Tự điền chỉ số cũ cho phòng thường và B3
   useEffect(() => {
     if (isEdit) return;
     if (!roomId || !utilityReadings) return;
@@ -1348,48 +1380,101 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
       .sort((a, b) => b.year - a.year || b.month - a.month);
     const latest = readingsOfRoom[0];
     if (latest) {
-      if (!isB3) {
-        setElecOld(String(latest.electricity_new));
+      if (isP2P3) {
+        setP2ElecOld(String(latest.p2_electricity_new || ""));
+        setP2WaterOld(String(latest.p2_water_new || ""));
+        setP3ElecOld(String(latest.p3_electricity_new || ""));
+        setP3WaterOld(String(latest.p3_water_new || ""));
+      } else {
+        if (!isB3) setElecOld(String(latest.electricity_new));
+        setWaterOld(String(latest.water_new));
       }
-      setWaterOld(String(latest.water_new));
     }
-  }, [roomId, utilityReadings, isEdit, isB3]);
+  }, [roomId, utilityReadings, isEdit, isB3, isP2P3]);
 
-  // Tính toán chỉ số tiêu thụ - dùng b1b2WaterInput thay vì b1b2WaterAutoTotal
+  // Tính toán cho B3
   const b1b2WaterValue = Number(b1b2WaterInput) || 0;
   
-  const elecUsed = isB3 ? 0 : Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
+  // Tính toán cho phòng thường
+  const elecUsed = isB3 || isP2P3 ? 0 : Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
   const waterUsed = isB3
     ? Math.max(0, Number(waterNew || 0) - Number(waterOld || 0) - b1b2WaterValue)
-    : Math.max(0, Number(waterNew || 0) - Number(waterOld || 0));
+    : isP2P3 ? 0 : Math.max(0, Number(waterNew || 0) - Number(waterOld || 0));
 
+  // Tính toán cho P2+P3
+  const p2ElecUsed = isP2P3 ? Math.max(0, Number(p2ElecNew || 0) - Number(p2ElecOld || 0)) : 0;
+  const p2WaterUsed = isP2P3 ? Math.max(0, Number(p2WaterNew || 0) - Number(p2WaterOld || 0)) : 0;
+  const p3ElecUsed = isP2P3 ? Math.max(0, Number(p3ElecNew || 0) - Number(p3ElecOld || 0)) : 0;
+  const p3WaterUsed = isP2P3 ? Math.max(0, Number(p3WaterNew || 0) - Number(p3WaterOld || 0)) : 0;
+
+  // Tính tiền
   const elecAmount = room ? elecUsed * Number(room.electricity_price) : 0;
   const waterAmount = room ? waterUsed * Number(room.water_price) : 0;
+  
+  // Tiền cho P2+P3
+  const p2ElecAmount = isP2P3 ? p2ElecUsed * Number(room?.electricity_price || 0) : 0;
+  const p2WaterAmount = isP2P3 ? p2WaterUsed * Number(room?.water_price || 0) : 0;
+  const p3ElecAmount = isP2P3 ? p3ElecUsed * Number(room?.electricity_price || 0) : 0;
+  const p3WaterAmount = isP2P3 ? p3WaterUsed * Number(room?.water_price || 0) : 0;
+  
+  const totalElecAmount = isP2P3 ? p2ElecAmount + p3ElecAmount : elecAmount;
+  const totalWaterAmount = isP2P3 ? p2WaterAmount + p3WaterAmount : waterAmount;
+
   const rentAmount = room ? Number(room.rent_price) : 0;
   const trashAmount = room ? Number(room.trash_price) : 0;
-  const rawTotal = rentAmount + elecAmount + waterAmount + trashAmount + Number(otherAmount || 0);
+  const rawTotal = rentAmount + totalElecAmount + totalWaterAmount + trashAmount + Number(otherAmount || 0);
   const total = roundToThousand(rawTotal);
 
   const submit = async () => {
     if (!roomId) return notify("Vui lòng chọn phòng", "error");
     
-    if (!isB3) {
+    // Validate cho phòng thường
+    if (!isB3 && !isP2P3) {
       if (Number(elecNew) < Number(elecOld)) {
         return notify("Chỉ số điện mới phải lớn hơn hoặc bằng chỉ số cũ", "error");
       }
-    }
-    
-    if (Number(waterNew) < Number(waterOld)) {
-      return notify("Chỉ số nước mới phải lớn hơn hoặc bằng chỉ số cũ", "error");
+      if (Number(waterNew) < Number(waterOld)) {
+        return notify("Chỉ số nước mới phải lớn hơn hoặc bằng chỉ số cũ", "error");
+      }
     }
 
-    if (isB3 && waterUsed < 0) {
-      return notify(`Lượng nước tiêu thụ không thể âm (${waterUsed} m³). Vui lòng kiểm tra lại tổng nước B1+B2.`, "error");
+    // Validate cho B3
+    if (isB3) {
+      if (Number(waterNew) < Number(waterOld)) {
+        return notify("Chỉ số nước mới phải lớn hơn hoặc bằng chỉ số cũ", "error");
+      }
+      if (waterUsed < 0) {
+        return notify(`Lượng nước tiêu thụ không thể âm (${waterUsed} m³). Vui lòng kiểm tra lại tổng nước B1+B2.`, "error");
+      }
+    }
+
+    // Validate cho P2+P3
+    if (isP2P3) {
+      if (Number(p2ElecNew) < Number(p2ElecOld)) return notify("Chỉ số điện P2 mới phải lớn hơn hoặc bằng chỉ số cũ", "error");
+      if (Number(p2WaterNew) < Number(p2WaterOld)) return notify("Chỉ số nước P2 mới phải lớn hơn hoặc bằng chỉ số cũ", "error");
+      if (Number(p3ElecNew) < Number(p3ElecOld)) return notify("Chỉ số điện P3 mới phải lớn hơn hoặc bằng chỉ số cũ", "error");
+      if (Number(p3WaterNew) < Number(p3WaterOld)) return notify("Chỉ số nước P3 mới phải lớn hơn hoặc bằng chỉ số cũ", "error");
     }
 
     setSaving(true);
 
-    const readingPayload = {
+    const readingPayload = isP2P3 ? {
+      room_id: roomId,
+      month,
+      year,
+      electricity_old: 0,
+      electricity_new: 0,
+      water_old: 0,
+      water_new: 0,
+      p2_electricity_old: Number(p2ElecOld) || 0,
+      p2_electricity_new: Number(p2ElecNew) || 0,
+      p2_water_old: Number(p2WaterOld) || 0,
+      p2_water_new: Number(p2WaterNew) || 0,
+      p3_electricity_old: Number(p3ElecOld) || 0,
+      p3_electricity_new: Number(p3ElecNew) || 0,
+      p3_water_old: Number(p3WaterOld) || 0,
+      p3_water_new: Number(p3WaterNew) || 0,
+    } : {
       room_id: roomId,
       month,
       year,
@@ -1410,19 +1495,34 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
       return notify(rErr.message, "error");
     }
 
-    const invoicePayload = {
+    const invoicePayload = isP2P3 ? {
       room_id: roomId,
       utility_reading_id: reading.id,
       month,
       year,
       rent_amount: rentAmount,
-      electricity_amount: elecAmount,
-      water_amount: waterAmount,
+      electricity_amount: p2ElecAmount,
+      water_amount: p2WaterAmount,
+      p3_electricity_amount: p3ElecAmount,
+      p3_water_amount: p3WaterAmount,
+      trash_amount: trashAmount,
+      other_amount: Number(otherAmount) || 0,
+      other_note: otherNote || null,
+      total_amount: total,
+    } : {
+      room_id: roomId,
+      utility_reading_id: reading.id,
+      month,
+      year,
+      rent_amount: rentAmount,
+      electricity_amount: totalElecAmount,
+      water_amount: totalWaterAmount,
       trash_amount: trashAmount,
       other_amount: Number(otherAmount) || 0,
       other_note: otherNote || null,
       total_amount: total,
     };
+    
     if (!isEdit) invoicePayload.status = "chua_thanh_toan";
 
     let invoiceQuery;
@@ -1448,14 +1548,28 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     setCreatedInvoice({
       ...invoice,
       room_number: room?.room_number,
-      elec_old: isB3 ? 0 : Number(elecOld) || 0,
-      elec_new: isB3 ? 0 : Number(elecNew) || 0,
+      isB3,
+      isP2P3,
+      elec_old: isB3 || isP2P3 ? 0 : Number(elecOld) || 0,
+      elec_new: isB3 || isP2P3 ? 0 : Number(elecNew) || 0,
       elec_used: elecUsed,
-      water_old: Number(waterOld) || 0,
-      water_new: Number(waterNew) || 0,
+      water_old: isP2P3 ? 0 : Number(waterOld) || 0,
+      water_new: isP2P3 ? 0 : Number(waterNew) || 0,
       water_used: waterUsed,
-      isB3: isB3,
-      b1b2_water_total: b1b2WaterValue,
+      b1b2_water_total: isB3 ? b1b2WaterValue : 0,
+      // P2+P3 data
+      p2_elec_old: Number(p2ElecOld) || 0,
+      p2_elec_new: Number(p2ElecNew) || 0,
+      p2_elec_used: p2ElecUsed,
+      p2_water_old: Number(p2WaterOld) || 0,
+      p2_water_new: Number(p2WaterNew) || 0,
+      p2_water_used: p2WaterUsed,
+      p3_elec_old: Number(p3ElecOld) || 0,
+      p3_elec_new: Number(p3ElecNew) || 0,
+      p3_elec_used: p3ElecUsed,
+      p3_water_old: Number(p3WaterOld) || 0,
+      p3_water_new: Number(p3WaterNew) || 0,
+      p3_water_used: p3WaterUsed,
     });
   };
 
@@ -1463,15 +1577,13 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     return (
       <InvoiceReceiptModal
         invoice={createdInvoice}
-        onClose={() => {
-          onSaved();
-        }}
+        onClose={() => onSaved()}
       />
     );
   }
 
   return (
-    <Modal title={isEdit ? "Sửa hóa đơn" : "Tạo hóa đơn tháng"} onClose={onClose} width={560}>
+    <Modal title={isEdit ? "Sửa hóa đơn" : "Tạo hóa đơn tháng"} onClose={onClose} width={isP2P3 ? 700 : 560}>
       <Field label="Phòng">
         {isEdit ? (
           <input value={room?.room_number || ""} disabled />
@@ -1504,8 +1616,49 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
         </Field>
       </div>
 
-      {/* Chỉ số điện - Ẩn nếu là B3 */}
-      {!isB3 && (
+      {/* Form cho P2+P3 */}
+      {isP2P3 && (
+        <>
+          <div className="p2p3-section">
+            <h4 className="p2p3-title">P2</h4>
+            <div className="utility-section">
+              <p className="field-label"><Zap size={14} className="inline-icon" /> Chỉ số điện P2 (kWh)</p>
+              <div className="field-grid-2">
+                <Field label="Số cũ"><input type="number" value={p2ElecOld} onChange={(e) => setP2ElecOld(e.target.value)} /></Field>
+                <Field label="Số mới"><input type="number" value={p2ElecNew} onChange={(e) => setP2ElecNew(e.target.value)} /></Field>
+              </div>
+            </div>
+            <div className="utility-section">
+              <p className="field-label"><Droplet size={14} className="inline-icon" /> Chỉ số nước P2 (m³)</p>
+              <div className="field-grid-2">
+                <Field label="Số cũ"><input type="number" value={p2WaterOld} onChange={(e) => setP2WaterOld(e.target.value)} /></Field>
+                <Field label="Số mới"><input type="number" value={p2WaterNew} onChange={(e) => setP2WaterNew(e.target.value)} /></Field>
+              </div>
+            </div>
+          </div>
+
+          <div className="p2p3-section">
+            <h4 className="p2p3-title">P3</h4>
+            <div className="utility-section">
+              <p className="field-label"><Zap size={14} className="inline-icon" /> Chỉ số điện P3 (kWh)</p>
+              <div className="field-grid-2">
+                <Field label="Số cũ"><input type="number" value={p3ElecOld} onChange={(e) => setP3ElecOld(e.target.value)} /></Field>
+                <Field label="Số mới"><input type="number" value={p3ElecNew} onChange={(e) => setP3ElecNew(e.target.value)} /></Field>
+              </div>
+            </div>
+            <div className="utility-section">
+              <p className="field-label"><Droplet size={14} className="inline-icon" /> Chỉ số nước P3 (m³)</p>
+              <div className="field-grid-2">
+                <Field label="Số cũ"><input type="number" value={p3WaterOld} onChange={(e) => setP3WaterOld(e.target.value)} /></Field>
+                <Field label="Số mới"><input type="number" value={p3WaterNew} onChange={(e) => setP3WaterNew(e.target.value)} /></Field>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Form cho phòng thường (không phải B3, không phải P2+P3) */}
+      {!isB3 && !isP2P3 && (
         <div className="utility-section">
           <p className="field-label"><Zap size={14} className="inline-icon" /> Chỉ số điện (kWh)</p>
           <div className="field-grid-2">
@@ -1515,42 +1668,43 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
         </div>
       )}
 
-      {/* Chỉ số nước */}
-      <div className="utility-section">
-        <p className="field-label"><Droplet size={14} className="inline-icon" /> Chỉ số nước (m³)</p>
-        <div className="field-grid-2">
-          <Field label="Số cũ"><input type="number" value={waterOld} onChange={(e) => setWaterOld(e.target.value)} /></Field>
-          <Field label="Số mới"><input type="number" value={waterNew} onChange={(e) => setWaterNew(e.target.value)} /></Field>
-        </div>
-
-        {/* Textbox nhập tổng nước B1+B2 cho B3 */}
-        {isB3 && (
-          <div className="b3-water-info">
-            <div className="field" style={{ width: "100%", marginBottom: 0 }}>
-              <span className="field-label">
-                Tổng chỉ số nước mới B1 + B2 (tháng {month}/{year})
-              </span>
-              <input
-                type="number"
-                value={b1b2WaterInput}
-                onChange={(e) => setB1b2WaterInput(e.target.value)}
-                placeholder="Nhập tổng chỉ số nước B1 + B2"
-              />
-              {b1b2WaterAutoTotal > 0 && (
-                <span className="b3-water-hint">
-                  Gợi ý từ dữ liệu: {b1b2WaterAutoTotal} m³
-                </span>
-              )}
-            </div>
+      {/* Form nước cho phòng thường và B3 */}
+      {!isP2P3 && (
+        <div className="utility-section">
+          <p className="field-label"><Droplet size={14} className="inline-icon" /> Chỉ số nước (m³)</p>
+          <div className="field-grid-2">
+            <Field label="Số cũ"><input type="number" value={waterOld} onChange={(e) => setWaterOld(e.target.value)} /></Field>
+            <Field label="Số mới"><input type="number" value={waterNew} onChange={(e) => setWaterNew(e.target.value)} /></Field>
           </div>
-        )}
 
-        {isB3 && b1b2WaterValue > 0 && (
-          <p className="muted small" style={{ margin: "8px 0 0" }}>
-            Công thức: {waterOld} → {waterNew} − {b1b2WaterValue} (B1+B2) = {waterUsed} m³
-          </p>
-        )}
-      </div>
+          {isB3 && (
+            <div className="b3-water-info">
+              <div className="field" style={{ width: "100%", marginBottom: 0 }}>
+                <span className="field-label">
+                  Tổng chỉ số nước mới B1 + B2 (tháng {month}/{year})
+                </span>
+                <input
+                  type="number"
+                  value={b1b2WaterInput}
+                  onChange={(e) => setB1b2WaterInput(e.target.value)}
+                  placeholder="Nhập tổng chỉ số nước B1 + B2"
+                />
+                {b1b2WaterAutoTotal > 0 && (
+                  <span className="b3-water-hint">
+                    Gợi ý từ dữ liệu: {b1b2WaterAutoTotal} m³
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isB3 && b1b2WaterValue > 0 && (
+            <p className="muted small" style={{ margin: "8px 0 0" }}>
+              Công thức: {waterOld} → {waterNew} − {b1b2WaterValue} (B1+B2) = {waterUsed} m³
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="field-grid-2">
         <Field label="Phụ thu khác (đ)">
@@ -1564,18 +1718,31 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
       {room && (
         <div className="invoice-preview">
           <div className="row-between"><span className="muted">Tiền phòng</span><span>{fmtVND(rentAmount)}</span></div>
-          {!isB3 && (
-            <div className="row-between"><span className="muted">Điện ({elecUsed} kWh)</span><span>{fmtVND(elecAmount)}</span></div>
-          )}
-          <div className="row-between">
-            <span className="muted">
-              Nước ({waterUsed} m³)
-              {isB3 && b1b2WaterValue > 0 && (
-                <span className="b3-note"> (đã trừ {b1b2WaterValue} m³ B1+B2)</span>
+          
+          {isP2P3 ? (
+            <>
+              <div className="row-between"><span className="muted"><Zap size={13} className="inline-icon" /> Điện P2 ({p2ElecUsed} kWh)</span><span>{fmtVND(p2ElecAmount)}</span></div>
+              <div className="row-between"><span className="muted"><Droplet size={13} className="inline-icon" /> Nước P2 ({p2WaterUsed} m³)</span><span>{fmtVND(p2WaterAmount)}</span></div>
+              <div className="row-between"><span className="muted"><Zap size={13} className="inline-icon" /> Điện P3 ({p3ElecUsed} kWh)</span><span>{fmtVND(p3ElecAmount)}</span></div>
+              <div className="row-between"><span className="muted"><Droplet size={13} className="inline-icon" /> Nước P3 ({p3WaterUsed} m³)</span><span>{fmtVND(p3WaterAmount)}</span></div>
+            </>
+          ) : (
+            <>
+              {!isB3 && (
+                <div className="row-between"><span className="muted">Điện ({elecUsed} kWh)</span><span>{fmtVND(elecAmount)}</span></div>
               )}
-            </span>
-            <span>{fmtVND(waterAmount)}</span>
-          </div>
+              <div className="row-between">
+                <span className="muted">
+                  Nước ({waterUsed} m³)
+                  {isB3 && b1b2WaterValue > 0 && (
+                    <span className="b3-note"> (đã trừ {b1b2WaterValue} m³ B1+B2)</span>
+                  )}
+                </span>
+                <span>{fmtVND(waterAmount)}</span>
+              </div>
+            </>
+          )}
+          
           <div className="row-between"><span className="muted">Tiền rác</span><span>{fmtVND(trashAmount)}</span></div>
           {Number(otherAmount) > 0 && (
             <div className="row-between"><span className="muted">{otherNote || "Phụ thu khác"}</span><span>{fmtVND(otherAmount)}</span></div>
@@ -1602,7 +1769,8 @@ function InvoiceReceiptModal({ invoice, onClose }) {
   const [working, setWorking] = useState(false);
 
   const fileName = `hoa-don-${invoice.room_number}-${invoice.month}-${invoice.year}.png`;
-  const isB3 = invoice.isB3 || invoice.room_number?.toUpperCase() === "B3";
+  const isB3 = invoice.isB3;
+  const isP2P3 = invoice.isP2P3;
 
   const renderCanvas = async () => {
     return html2canvas(receiptRef.current, {
@@ -1657,26 +1825,44 @@ function InvoiceReceiptModal({ invoice, onClose }) {
             <span>{fmtVND(invoice.rent_amount)}</span>
           </div>
 
-          {/* Điện - chỉ hiển thị nếu không phải B3 */}
-          {!isB3 && (
-            <div className="row-between">
-              <span className="muted">
-                <Zap size={13} className="inline-icon" /> Điện ({invoice.elec_old} → {invoice.elec_new}, {invoice.elec_used} kWh)
-              </span>
-              <span>{fmtVND(invoice.electricity_amount)}</span>
-            </div>
-          )}
-
-          {/* Nước */}
-          <div className="row-between">
-            <span className="muted">
-              <Droplet size={13} className="inline-icon" /> Nước ({invoice.water_old} → {invoice.water_new}, {invoice.water_used} m³)
-              {isB3 && invoice.b1b2_water_total > 0 && (
-                <span className="receipt-b3-note">Đã trừ tổng B1+B2: {invoice.b1b2_water_total} m³</span>
+          {isP2P3 ? (
+            <>
+              <div className="row-between">
+                <span className="muted"><Zap size={13} className="inline-icon" /> Điện P2 ({invoice.p2_elec_old} → {invoice.p2_elec_new}, {invoice.p2_elec_used} kWh)</span>
+                <span>{fmtVND(invoice.electricity_amount)}</span>
+              </div>
+              <div className="row-between">
+                <span className="muted"><Droplet size={13} className="inline-icon" /> Nước P2 ({invoice.p2_water_old} → {invoice.p2_water_new}, {invoice.p2_water_used} m³)</span>
+                <span>{fmtVND(invoice.water_amount)}</span>
+              </div>
+              <div className="row-between">
+                <span className="muted"><Zap size={13} className="inline-icon" /> Điện P3 ({invoice.p3_elec_old} → {invoice.p3_elec_new}, {invoice.p3_elec_used} kWh)</span>
+                <span>{fmtVND(invoice.p3_electricity_amount || 0)}</span>
+              </div>
+              <div className="row-between">
+                <span className="muted"><Droplet size={13} className="inline-icon" /> Nước P3 ({invoice.p3_water_old} → {invoice.p3_water_new}, {invoice.p3_water_used} m³)</span>
+                <span>{fmtVND(invoice.p3_water_amount || 0)}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              {!isB3 && (
+                <div className="row-between">
+                  <span className="muted"><Zap size={13} className="inline-icon" /> Điện ({invoice.elec_old} → {invoice.elec_new}, {invoice.elec_used} kWh)</span>
+                  <span>{fmtVND(invoice.electricity_amount)}</span>
+                </div>
               )}
-            </span>
-            <span>{fmtVND(invoice.water_amount)}</span>
-          </div>
+              <div className="row-between">
+                <span className="muted">
+                  <Droplet size={13} className="inline-icon" /> Nước ({invoice.water_old} → {invoice.water_new}, {invoice.water_used} m³)
+                  {isB3 && invoice.b1b2_water_total > 0 && (
+                    <span className="receipt-b3-note">Đã trừ tổng B1+B2: {invoice.b1b2_water_total} m³</span>
+                  )}
+                </span>
+                <span>{fmtVND(invoice.water_amount)}</span>
+              </div>
+            </>
+          )}
 
           <div className="row-between">
             <span className="muted">Tiền rác</span>
@@ -2161,6 +2347,23 @@ const CSS = `
 .tenant-date-label { font-size: 11px; color: var(--ink-400); font-weight: 600; }
 .tenant-date-field input { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .checkbox-inline { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-600); white-space: nowrap; }
+
+/* ---------- P2+P3 SPECIAL STYLES ---------- */
+.p2p3-section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: #fafbfc;
+}
+.p2p3-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--blue-600);
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--blue-100);
+}
 
 /* ---------- B3 SPECIAL STYLES ---------- */
 .b3-water-info {

@@ -35,7 +35,6 @@ const YEARS = [THIS_YEAR - 1, THIS_YEAR, THIS_YEAR + 1];
 const fmtVND = (n) =>
   (Number(n) || 0).toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " đ";
 
-// Làm tròn đến hàng nghìn: lẻ từ 500 trở lên thì tròn lên, dưới 500 thì tròn xuống
 const roundToThousand = (n) => Math.round(Number(n) / 1000) * 1000;
 
 const fmtDate = (d) => {
@@ -666,7 +665,6 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
   const [trashPrice, setTrashPrice] = useState(room?.trash_price || "");
   const [saving, setSaving] = useState(false);
 
-  // Hợp đồng đang active của phòng này (nếu là sửa phòng đã có khách)
   const activeContract = room
     ? contracts?.find((c) => c.room_id === room.id && c.status === "active")
     : null;
@@ -674,7 +672,6 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
     ? tenants?.filter((t) => t.contract_id === activeContract.id) || []
     : [];
 
-  // Danh sách người thuê đang nhập trong form
   const [people, setPeople] = useState(
     existingTenants.length > 0
       ? existingTenants.map((t) => ({
@@ -698,7 +695,6 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
     setPeople((p) =>
       p.map((per, i) => {
         if (field === "is_representative" && value) {
-          // chỉ 1 người được là chủ phòng tại 1 thời điểm
           return { ...per, is_representative: i === idx };
         }
         return i === idx ? { ...per, [field]: value } : per;
@@ -736,7 +732,6 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
       roomId = data.id;
     }
 
-    // Nếu có người thuê nhập vào, tạo/cập nhật hợp đồng + danh sách người
     if (validPeople.length > 0) {
       let contractId = activeContract?.id;
 
@@ -758,7 +753,6 @@ function RoomFormModal({ room, contracts, tenants, onClose, onSaved, notify }) {
         contractId = contract.id;
       }
 
-      // Xóa hết người thuê cũ của hợp đồng này rồi ghi lại danh sách mới
       const { error: delErr } = await supabase.from("tenants").delete().eq("contract_id", contractId);
       if (delErr) {
         setSaving(false);
@@ -1308,12 +1302,15 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
   const [saving, setSaving] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState(null);
 
+  // State cho tổng nước B1+B2 (người dùng tự nhập)
+  const [b1b2WaterInput, setB1b2WaterInput] = useState("");
+
   const occupiedRooms = rooms.filter((r) => r.status === "da_thue");
   const room = rooms.find((r) => r.id === roomId);
   const isB3 = room?.room_number?.toUpperCase().trim() === "B3";
 
-  // Tổng chỉ số nước mới của B1 và B2 trong cùng tháng/năm (chỉ dùng cho B3)
-  const b1b2WaterNewTotal = useMemo(() => {
+  // Tự động tính tổng nước B1+B2 từ DB (để hiển thị gợi ý)
+  const b1b2WaterAutoTotal = useMemo(() => {
     if (!isB3 || !utilityReadings || !month || !year) return 0;
     const b1 = rooms.find((r) => r.room_number?.toUpperCase().trim() === "B1");
     const b2 = rooms.find((r) => r.room_number?.toUpperCase().trim() === "B2");
@@ -1327,6 +1324,20 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     });
     return total;
   }, [isB3, utilityReadings, month, year, rooms]);
+
+  // Khi chọn phòng B3 và có dữ liệu tự động, gợi ý sẵn vào input (chỉ khi chưa có giá trị)
+  useEffect(() => {
+    if (isB3 && b1b2WaterAutoTotal > 0 && !b1b2WaterInput) {
+      setB1b2WaterInput(String(b1b2WaterAutoTotal));
+    }
+  }, [isB3, b1b2WaterAutoTotal, b1b2WaterInput]);
+
+  // Khi đổi phòng (không còn là B3), reset input
+  useEffect(() => {
+    if (!isB3) {
+      setB1b2WaterInput("");
+    }
+  }, [isB3]);
 
   // Tự điền sẵn chỉ số cũ = chỉ số mới của lần đọc gần nhất trước đó của phòng này
   useEffect(() => {
@@ -1344,10 +1355,12 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     }
   }, [roomId, utilityReadings, isEdit, isB3]);
 
-  // Tính toán chỉ số tiêu thụ
+  // Tính toán chỉ số tiêu thụ - dùng b1b2WaterInput thay vì b1b2WaterAutoTotal
+  const b1b2WaterValue = Number(b1b2WaterInput) || 0;
+  
   const elecUsed = isB3 ? 0 : Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
   const waterUsed = isB3
-    ? Math.max(0, Number(waterNew || 0) - Number(waterOld || 0) - b1b2WaterNewTotal)
+    ? Math.max(0, Number(waterNew || 0) - Number(waterOld || 0) - b1b2WaterValue)
     : Math.max(0, Number(waterNew || 0) - Number(waterOld || 0));
 
   const elecAmount = room ? elecUsed * Number(room.electricity_price) : 0;
@@ -1371,7 +1384,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     }
 
     if (isB3 && waterUsed < 0) {
-      return notify(`Lượng nước tiêu thụ không thể âm (${waterUsed} m³). Vui lòng kiểm tra lại chỉ số B1, B2.`, "error");
+      return notify(`Lượng nước tiêu thụ không thể âm (${waterUsed} m³). Vui lòng kiểm tra lại tổng nước B1+B2.`, "error");
     }
 
     setSaving(true);
@@ -1442,7 +1455,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
       water_new: Number(waterNew) || 0,
       water_used: waterUsed,
       isB3: isB3,
-      b1b2_water_total: isB3 ? b1b2WaterNewTotal : 0,
+      b1b2_water_total: b1b2WaterValue,
     });
   };
 
@@ -1510,19 +1523,31 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
           <Field label="Số mới"><input type="number" value={waterNew} onChange={(e) => setWaterNew(e.target.value)} /></Field>
         </div>
 
-        {/* Hiển thị tổng nước B1+B2 nếu là B3 */}
+        {/* Textbox nhập tổng nước B1+B2 cho B3 */}
         {isB3 && (
           <div className="b3-water-info">
-            <span className="field-label" style={{ margin: 0 }}>
-              Tổng chỉ số nước mới B1 + B2 (tháng {month}/{year})
-            </span>
-            <span className="b3-water-value">{b1b2WaterNewTotal} m³</span>
+            <div className="field" style={{ width: "100%", marginBottom: 0 }}>
+              <span className="field-label">
+                Tổng chỉ số nước mới B1 + B2 (tháng {month}/{year})
+              </span>
+              <input
+                type="number"
+                value={b1b2WaterInput}
+                onChange={(e) => setB1b2WaterInput(e.target.value)}
+                placeholder="Nhập tổng chỉ số nước B1 + B2"
+              />
+              {b1b2WaterAutoTotal > 0 && (
+                <span className="b3-water-hint">
+                  Gợi ý từ dữ liệu: {b1b2WaterAutoTotal} m³
+                </span>
+              )}
+            </div>
           </div>
         )}
 
-        {isB3 && b1b2WaterNewTotal > 0 && (
+        {isB3 && b1b2WaterValue > 0 && (
           <p className="muted small" style={{ margin: "8px 0 0" }}>
-            Công thức: {waterOld} → {waterNew} − {b1b2WaterNewTotal} (B1+B2) = {waterUsed} m³
+            Công thức: {waterOld} → {waterNew} − {b1b2WaterValue} (B1+B2) = {waterUsed} m³
           </p>
         )}
       </div>
@@ -1545,8 +1570,8 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
           <div className="row-between">
             <span className="muted">
               Nước ({waterUsed} m³)
-              {isB3 && b1b2WaterNewTotal > 0 && (
-                <span className="b3-note"> (đã trừ {b1b2WaterNewTotal} m³ B1+B2)</span>
+              {isB3 && b1b2WaterValue > 0 && (
+                <span className="b3-note"> (đã trừ {b1b2WaterValue} m³ B1+B2)</span>
               )}
             </span>
             <span>{fmtVND(waterAmount)}</span>
@@ -1865,7 +1890,7 @@ function ExpenseFormModal({ rooms, onClose, onSaved, notify }) {
 }
 
 // ============================================================
-// CSS — Hiện đại tối giản, nền trắng + xanh, nhiều khoảng trống
+// CSS
 // ============================================================
 const CSS = `
 :root {
@@ -1936,11 +1961,6 @@ const CSS = `
 .page-head h1 { font-size: 26px; font-weight: 700; margin: 4px 0 4px; letter-spacing: -0.02em; }
 .page-head p { color: var(--ink-600); font-size: 14px; margin: 0; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0; }
-.link-back {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: none; background: none; color: var(--blue-600);
-  font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; margin-bottom: 6px;
-}
 
 /* ---------- BUTTONS ---------- */
 .btn-primary {
@@ -2007,7 +2027,6 @@ const CSS = `
 .house-mini-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .house-mini-row:last-child { border-bottom: none; padding-bottom: 0; }
 .house-mini-name { font-size: 13.5px; font-weight: 600; margin: 0; }
-.house-mini-addr { font-size: 12px; color: var(--ink-400); margin: 2px 0 0; }
 
 /* ---------- TABLE ---------- */
 .table-scroll { overflow-x: auto; }
@@ -2023,43 +2042,6 @@ const CSS = `
 .badge-unpaid { background: var(--red-bg); color: var(--red); }
 .badge-paid { background: var(--green-bg); color: var(--green); }
 .pill { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 100px; background: var(--grey-bg); color: var(--ink-600); }
-.pill-green { background: var(--green-bg); color: var(--green); }
-
-/* ---------- HOUSES & ROOMS ---------- */
-.house-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.house-card {
-  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow); transition: border-color 0.15s; overflow: hidden;
-}
-.house-card:hover { border-color: var(--blue-500); }
-.house-card-clickable {
-  width: 100%; text-align: left; background: none; border: none; cursor: pointer;
-  padding: 20px; display: block; font: inherit; color: inherit;
-}
-.house-card-top { display: flex; align-items: center; justify-content: space-between; color: var(--blue-600); margin-bottom: 10px; }
-.house-card h3 { font-size: 16px; margin: 0 0 4px; }
-.house-card-foot { display: flex; gap: 8px; margin-top: 14px; }
-.house-card-actions {
-  display: flex; gap: 4px; padding: 8px 14px; border-top: 1px solid var(--line); background: #fafbfc;
-}
-.btn-ghost-danger { color: var(--red); }
-.btn-ghost-danger:hover { background: var(--red-bg); }
-.btn-danger {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--red); color: #fff; border: none;
-  padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
-}
-.btn-danger:hover { background: #b91c1c; }
-.btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.room-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.room-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
-.room-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.room-number { font-size: 15px; font-weight: 700; }
-.room-card-body { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
-.room-card-tenants { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
-.room-card-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
-.room-card-actions-wrap { flex-wrap: wrap; justify-content: flex-start; gap: 4px; }
 
 /* ---------- ROOM ACCORDION ---------- */
 .room-accordion { display: flex; flex-direction: column; gap: 8px; }
@@ -2083,6 +2065,19 @@ const CSS = `
 }
 .btn-ghost-highlight:hover { background: var(--blue-600); }
 .inline-icon { vertical-align: -2px; margin-right: 3px; }
+.btn-ghost-danger { color: var(--red); }
+.btn-ghost-danger:hover { background: var(--red-bg); }
+.btn-danger {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--red); color: #fff; border: none;
+  padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-danger:hover { background: #b91c1c; }
+.btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+.room-card-body { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.room-card-tenants { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.room-card-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
+.room-card-actions-wrap { flex-wrap: wrap; justify-content: flex-start; gap: 4px; }
 
 /* ---------- CONTRACTS / TENANTS ---------- */
 .search-bar {
@@ -2145,18 +2140,15 @@ const CSS = `
 .utility-section .field-grid-2 { margin-top: 8px; }
 .invoice-preview { background: var(--grey-bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13.5px; display: flex; flex-direction: column; gap: 6px; }
 
-/* ---------- RECEIPT (hóa đơn xuất ảnh) ---------- */
+/* ---------- RECEIPT ---------- */
 .receipt-wrap { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
 .receipt-head { text-align: center; border-bottom: 1px dashed var(--line); padding-bottom: 14px; margin-bottom: 14px; }
 .receipt-room { font-size: 18px; font-weight: 700; margin: 0; }
 .receipt-month { font-size: 13px; color: var(--ink-400); margin: 4px 0 0; }
 .receipt-body { display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; }
-.receipt-actions { margin-top: 16px; }
-.receipt-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.receipt-actions { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .receipt-actions button { justify-content: center; }
 .tenant-form-section { margin: 18px 0; }
-.tenant-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto auto; gap: 8px; align-items: center; margin-top: 8px; }
-.tenant-row input { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .tenant-card {
   border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; background: #fafbfc;
 }
@@ -2177,14 +2169,31 @@ const CSS = `
   background: #fff;
   border: 1px solid #93c5fd;
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
 }
-.b3-water-value {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--blue-600);
+.b3-water-info .field {
+  margin-bottom: 0;
+}
+.b3-water-info input {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 14px;
+  outline: none;
+  background: #fff;
+  color: var(--ink-900);
+  font-family: inherit;
+  width: 100%;
+}
+.b3-water-info input:focus {
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px var(--blue-100);
+}
+.b3-water-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-400);
+  margin-top: 4px;
+  font-style: italic;
 }
 .b3-note {
   font-size: 11px;

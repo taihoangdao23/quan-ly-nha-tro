@@ -426,12 +426,12 @@ function NhaPhong({ rooms, contracts, tenants, invoices, utilityReadings, loadAl
                   </div>
                 )}
               </div>
-              {room.status === "da_thue" && (
-                <button className="btn-invoice-highlight" onClick={() => setInvoiceRoom(room)}>
-                  <Receipt size={15} /> Lên hóa đơn tháng này
-                </button>
-              )}
               <div className="room-card-actions room-card-actions-wrap">
+                {room.status === "da_thue" && (
+                  <button className="btn-ghost-sm btn-ghost-highlight" onClick={() => setInvoiceRoom(room)}>
+                    <Receipt size={14} /> Lên hóa đơn
+                  </button>
+                )}
                 <button className="btn-ghost-sm" onClick={() => setHistoryRoom(room)}>
                   <History size={14} /> Lịch sử
                 </button>
@@ -1958,14 +1958,11 @@ const CSS = `
 .room-card-tenants { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .room-card-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
 .room-card-actions-wrap { flex-wrap: wrap; justify-content: flex-start; gap: 4px; }
-.btn-invoice-highlight {
-  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
-  margin-top: 12px; padding: 10px 12px; border-radius: 10px; border: none;
-  background: linear-gradient(135deg, var(--blue-500), #4f9cf9); color: #fff;
-  font-size: 13.5px; font-weight: 700; cursor: pointer;
-  box-shadow: 0 4px 12px rgba(37,99,235,0.25); transition: transform 0.12s, box-shadow 0.12s;
+.btn-ghost-highlight {
+  background: var(--blue-500); color: #fff; font-weight: 700;
+  box-shadow: 0 2px 8px rgba(37,99,235,0.25);
 }
-.btn-invoice-highlight:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(37,99,235,0.32); }
+.btn-ghost-highlight:hover { background: var(--blue-600); }
 .inline-icon { vertical-align: -2px; margin-right: 3px; }
 
 /* ---------- CONTRACTS / TENANTS ---------- */

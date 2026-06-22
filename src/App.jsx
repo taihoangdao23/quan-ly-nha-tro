@@ -111,7 +111,7 @@ function Toast({ toasts }) {
 // APP
 // ============================================================
 export default function App() {
-  const [tab, setTab] = useState("tongquan");
+  const [tab, setTab] = useState("nha");
   const [houses, setHouses] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [contracts, setContracts] = useState([]);
@@ -157,8 +157,8 @@ export default function App() {
   const ctx = { houses, rooms, contracts, tenants, invoices, expenses, utilityReadings, loadAll, notify };
 
   const NAV = [
-    { key: "tongquan", label: "Tổng quan", shortLabel: "Tổng quan", icon: Home },
     { key: "nha", label: "Nhà & phòng", shortLabel: "Nhà/phòng", icon: Building2 },
+    { key: "tongquan", label: "Tổng quan", shortLabel: "Tổng quan", icon: Home },
     { key: "khach", label: "Khách thuê", shortLabel: "Khách", icon: Users },
     { key: "hoadon", label: "Hóa đơn", shortLabel: "Hóa đơn", icon: Receipt },
     { key: "thuchi", label: "Thu chi", shortLabel: "Thu chi", icon: Wallet },
@@ -170,10 +170,9 @@ export default function App() {
 
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">TT</div>
+          <div className="brand-mark">QT</div>
           <div className="brand-text">
-            <strong>Trọ Tốt</strong>
-            <span>Quản lý nhà trọ</span>
+            <strong>QUẢN LÝ TRỌ</strong>
           </div>
         </div>
         <nav className="nav">

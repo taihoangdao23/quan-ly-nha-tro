@@ -623,7 +623,7 @@ function RoomHistoryModal({ room, invoices, utilityReadings, onClose, onChanged,
                     <td>{inv.month}/{inv.year}</td>
                     {isP2P3 ? (
                       <>
-                        <td>{reading ? `${reading.p2_electricity_new || 0}` : "—"}</td>
+                        <td>{reading ? `${reading.electricity_new || 0}` : "—"}</td>
                         <td>{reading ? `${reading.p2_water_new || 0}` : "—"}</td>
                         <td>{reading ? `${reading.p3_electricity_new || 0}` : "—"}</td>
                         <td>{reading ? `${reading.p3_water_new || 0}` : "—"}</td>
@@ -1322,7 +1322,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
 
   // State cho P2+P3
   const [p2ElecOld, setP2ElecOld] = useState(existingReading ? String(existingReading.p2_electricity_old || "") : "");
-  const [p2ElecNew, setP2ElecNew] = useState(existingReading ? String(existingReading.p2_electricity_new || "") : "");
+  const [p2ElecNew, setP2ElecNew] = useState(existingReading ? String(existingReading.electricity_new || "") : "");
   const [p2WaterOld, setP2WaterOld] = useState(existingReading ? String(existingReading.p2_water_old || "") : "");
   const [p2WaterNew, setP2WaterNew] = useState(existingReading ? String(existingReading.p2_water_new || "") : "");
   const [p3ElecOld, setP3ElecOld] = useState(existingReading ? String(existingReading.p3_electricity_old || "") : "");
@@ -1381,7 +1381,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     const latest = readingsOfRoom[0];
     if (latest) {
       if (isP2P3) {
-        setP2ElecOld(String(latest.p2_electricity_new || ""));
+        setP2ElecOld(String(latest.electricity_new || ""));
         setP2WaterOld(String(latest.p2_water_new || ""));
         setP3ElecOld(String(latest.p3_electricity_new || ""));
         setP3WaterOld(String(latest.p3_water_new || ""));
@@ -1467,7 +1467,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
       water_old: 0,
       water_new: 0,
       p2_electricity_old: Number(p2ElecOld) || 0,
-      p2_electricity_new: Number(p2ElecNew) || 0,
+      electricity_new: Number(p2ElecNew) || 0,
       p2_water_old: Number(p2WaterOld) || 0,
       p2_water_new: Number(p2WaterNew) || 0,
       p3_electricity_old: Number(p3ElecOld) || 0,

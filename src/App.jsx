@@ -19,6 +19,7 @@ import {
   History,
   Copy,
   Download,
+  ChevronDown,
   TrendingUp,
   TrendingDown,
   AlertCircle,
@@ -369,6 +370,7 @@ function NhaPhong({ rooms, contracts, tenants, invoices, utilityReadings, loadAl
   const [deleteRoom, setDeleteRoom] = useState(null);
   const [invoiceRoom, setInvoiceRoom] = useState(null);
   const [historyRoom, setHistoryRoom] = useState(null);
+  const [openRoomId, setOpenRoomId] = useState(null);
 
   return (
     <div className="page">
@@ -388,65 +390,80 @@ function NhaPhong({ rooms, contracts, tenants, invoices, utilityReadings, loadAl
         </button>
       </header>
 
-      <div className="room-grid">
+      <div className="room-accordion">
         {rooms.map((room) => {
           const activeContract = contracts.find((c) => c.room_id === room.id && c.status === "active");
           const people = activeContract ? tenants.filter((t) => t.contract_id === activeContract.id) : [];
+          const isOpen = openRoomId === room.id;
           return (
-            <div key={room.id} className="room-card">
-              <div className="room-card-head">
-                <span className="room-number">{room.room_number}</span>
-                <Badge status={room.status} />
-              </div>
-              <div className="room-card-body">
-                <div className="row-between">
-                  <span className="muted">Giá thuê</span>
-                  <strong>{fmtVND(room.rent_price)}</strong>
-                </div>
-                <div className="row-between">
-                  <span className="muted"><Zap size={13} className="inline-icon" /> Điện</span>
-                  <span>{fmtVND(room.electricity_price)}/kWh</span>
-                </div>
-                <div className="row-between">
-                  <span className="muted"><Droplet size={13} className="inline-icon" /> Nước</span>
-                  <span>{fmtVND(room.water_price)}/m³</span>
-                </div>
-                <div className="row-between">
-                  <span className="muted">Tiền rác</span>
-                  <span>{fmtVND(room.trash_price)}/tháng</span>
-                </div>
-                {people.length > 0 && (
-                  <div className="tenant-chip-list room-card-tenants">
-                    {people.map((p) => (
-                      <span key={p.id} className={`tenant-chip ${p.is_representative ? "tenant-chip-rep" : ""}`}>
-                        {p.full_name}{p.is_representative ? " · chủ phòng" : ""}
-                      </span>
-                    ))}
+            <div key={room.id} className={`room-accordion-item ${isOpen ? "open" : ""}`}>
+              <button
+                className="room-accordion-header"
+                onClick={() => setOpenRoomId(isOpen ? null : room.id)}
+              >
+                <span className="room-accordion-name">
+                  <ChevronDown size={16} className={`room-accordion-chevron ${isOpen ? "rotated" : ""}`} />
+                  {room.room_number}
+                </span>
+                <span className="room-accordion-meta">
+                  <span className="muted small">{fmtVND(room.rent_price)}</span>
+                  <Badge status={room.status} />
+                </span>
+              </button>
+
+              {isOpen && (
+                <div className="room-accordion-body">
+                  <div className="room-card-body">
+                    <div className="row-between">
+                      <span className="muted">Giá thuê</span>
+                      <strong>{fmtVND(room.rent_price)}</strong>
+                    </div>
+                    <div className="row-between">
+                      <span className="muted"><Zap size={13} className="inline-icon" /> Điện</span>
+                      <span>{fmtVND(room.electricity_price)}/kWh</span>
+                    </div>
+                    <div className="row-between">
+                      <span className="muted"><Droplet size={13} className="inline-icon" /> Nước</span>
+                      <span>{fmtVND(room.water_price)}/m³</span>
+                    </div>
+                    <div className="row-between">
+                      <span className="muted">Tiền rác</span>
+                      <span>{fmtVND(room.trash_price)}/tháng</span>
+                    </div>
+                    {people.length > 0 && (
+                      <div className="tenant-chip-list room-card-tenants">
+                        {people.map((p) => (
+                          <span key={p.id} className={`tenant-chip ${p.is_representative ? "tenant-chip-rep" : ""}`}>
+                            {p.full_name}{p.is_representative ? " · chủ phòng" : ""}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="room-card-actions room-card-actions-wrap">
-                {room.status === "da_thue" && (
-                  <button className="btn-ghost-sm btn-ghost-highlight" onClick={() => setInvoiceRoom(room)}>
-                    <Receipt size={14} /> Lên hóa đơn
-                  </button>
-                )}
-                <button className="btn-ghost-sm" onClick={() => setHistoryRoom(room)}>
-                  <History size={14} /> Lịch sử
-                </button>
-                <button
-                  className="btn-ghost-sm"
-                  onClick={() => {
-                    setEditRoom(room);
-                    setShowRoomModal(true);
-                  }}
-                >
-                  <Pencil size={14} /> Sửa
-                </button>
-                <button className="btn-ghost-sm btn-ghost-danger" onClick={() => setDeleteRoom(room)}>
-                  <Trash2 size={14} /> Xóa
-                </button>
-              </div>
+                  <div className="room-card-actions room-card-actions-wrap">
+                    {room.status === "da_thue" && (
+                      <button className="btn-ghost-sm btn-ghost-highlight" onClick={() => setInvoiceRoom(room)}>
+                        <Receipt size={14} /> Lên hóa đơn
+                      </button>
+                    )}
+                    <button className="btn-ghost-sm" onClick={() => setHistoryRoom(room)}>
+                      <History size={14} /> Lịch sử
+                    </button>
+                    <button
+                      className="btn-ghost-sm"
+                      onClick={() => {
+                        setEditRoom(room);
+                        setShowRoomModal(true);
+                      }}
+                    >
+                      <Pencil size={14} /> Sửa
+                    </button>
+                    <button className="btn-ghost-sm btn-ghost-danger" onClick={() => setDeleteRoom(room)}>
+                      <Trash2 size={14} /> Xóa
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -1957,6 +1974,23 @@ const CSS = `
 .room-card-tenants { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .room-card-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
 .room-card-actions-wrap { flex-wrap: wrap; justify-content: flex-start; gap: 4px; }
+
+/* ---------- ROOM ACCORDION ---------- */
+.room-accordion { display: flex; flex-direction: column; gap: 8px; }
+.room-accordion-item {
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.room-accordion-item.open { border-color: var(--blue-500); }
+.room-accordion-header {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: none; border: none; cursor: pointer; padding: 14px 18px; font: inherit; color: inherit;
+}
+.room-accordion-name { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+.room-accordion-chevron { color: var(--ink-400); transition: transform 0.15s; flex-shrink: 0; }
+.room-accordion-chevron.rotated { transform: rotate(-180deg); }
+.room-accordion-meta { display: flex; align-items: center; gap: 10px; }
+.room-accordion-body { padding: 0 18px 16px; border-top: 1px solid var(--line); padding-top: 14px; }
 .btn-ghost-highlight {
   background: var(--blue-500); color: #fff; font-weight: 700;
   box-shadow: 0 2px 8px rgba(37,99,235,0.25);

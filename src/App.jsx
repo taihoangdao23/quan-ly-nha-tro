@@ -1605,7 +1605,7 @@ function InvoiceReceiptModal({ invoice, onClose }) {
 }
 
 // ============================================================
-// TAB: DANH SÁCH THU
+// TAB: DANH SÁCH THU (CHỈ 3 CỘT)
 // ============================================================
 function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -1649,10 +1649,7 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
         roomId: room.id,
         roomNumber: room.room_number,
         representative: representative?.full_name || "Chưa có",
-        rentPrice: room.rent_price,
-        invoice: invoice || null,
         totalAmount: invoice ? invoice.total_amount : 0,
-        status: invoice?.status || "chua_co_hoa_don",
         hasInvoice: !!invoice,
       };
     });
@@ -1671,29 +1668,17 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
 
   // Tính tổng tiền
   const totalAmount = filteredData.reduce((sum, item) => sum + Number(item.totalAmount), 0);
-  const totalPaid = filteredData
-    .filter((item) => item.status === "da_thanh_toan")
-    .reduce((sum, item) => sum + Number(item.totalAmount), 0);
-  const totalUnpaid = filteredData
-    .filter((item) => item.status === "chua_thanh_toan")
-    .reduce((sum, item) => sum + Number(item.totalAmount), 0);
 
   // Xuất Excel (đơn giản)
   const exportToCSV = () => {
     if (filteredData.length === 0) return notify("Không có dữ liệu để xuất", "error");
     
-    const headers = ["STT", "Phòng", "Chủ hộ/Đại diện", "Tiền phòng", "Tiền điện", "Tiền nước", "Tiền rác", "Tổng tiền", "Trạng thái"];
+    const headers = ["STT", "Phòng", "Chủ hộ/Đại diện", "Tổng tiền"];
     const rows = filteredData.map((item, index) => [
       index + 1,
       item.roomNumber,
       item.representative,
-      item.rentPrice || 0,
-      item.invoice?.electricity_amount || 0,
-      item.invoice?.water_amount || 0,
-      item.invoice?.trash_amount || 0,
-      item.totalAmount || 0,
-      item.status === "da_thanh_toan" ? "Đã thanh toán" : 
-      item.status === "chua_thanh_toan" ? "Chưa thanh toán" : "Chưa có hóa đơn"
+      item.totalAmount || 0
     ]);
 
     let csvContent = headers.join(",") + "\n";
@@ -1761,20 +1746,20 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
         <div className="stat-card">
           <div className="stat-icon stat-icon-green"><CheckCircle2 size={18} /></div>
           <div>
-            <p className="stat-label">Đã thanh toán</p>
-            <p className="stat-value text-green">{fmtVND(totalPaid)}</p>
+            <p className="stat-label">Tổng tiền thu</p>
+            <p className="stat-value text-green">{fmtVND(totalAmount)}</p>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon stat-icon-red"><AlertCircle size={18} /></div>
+          <div className="stat-icon stat-icon-grey"><Circle size={18} /></div>
           <div>
-            <p className="stat-label">Chưa thanh toán</p>
-            <p className="stat-value text-red">{fmtVND(totalUnpaid)}</p>
+            <p className="stat-label">Số phòng</p>
+            <p className="stat-value">{filteredData.length} phòng</p>
           </div>
         </div>
       </div>
 
-      {/* Bảng danh sách */}
+      {/* Bảng danh sách - CHỈ 3 CỘT */}
       <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
         <div className="table-scroll">
           <table className="table">
@@ -1783,18 +1768,13 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
                 <th style={{ width: 50 }}>STT</th>
                 <th>Phòng</th>
                 <th>Chủ hộ/Đại diện</th>
-                <th style={{ textAlign: "right" }}>Tiền phòng</th>
-                <th style={{ textAlign: "right" }}>Tiền điện</th>
-                <th style={{ textAlign: "right" }}>Tiền nước</th>
-                <th style={{ textAlign: "right" }}>Tiền rác</th>
                 <th style={{ textAlign: "right" }}>Tổng tiền</th>
-                <th style={{ textAlign: "center" }}>Trạng thái</th>
               </tr>
             </thead>
             <tbody>
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: "center", padding: "40px 0" }}>
+                  <td colSpan={4} style={{ textAlign: "center", padding: "40px 0" }}>
                     <EmptyState 
                       icon={Receipt} 
                       title="Không có dữ liệu" 
@@ -1810,25 +1790,8 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
                       <strong>{item.roomNumber}</strong>
                     </td>
                     <td>{item.representative}</td>
-                    <td style={{ textAlign: "right" }}>{fmtVND(item.rentPrice)}</td>
                     <td style={{ textAlign: "right" }}>
-                      {item.invoice ? fmtVND(item.invoice.electricity_amount) : "—"}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      {item.invoice ? fmtVND(item.invoice.water_amount) : "—"}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      {item.invoice ? fmtVND(item.invoice.trash_amount) : "—"}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <strong>{item.invoice ? fmtVND(item.totalAmount) : "—"}</strong>
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      {item.hasInvoice ? (
-                        <Badge status={item.status} />
-                      ) : (
-                        <span className="badge badge-empty">Chưa có</span>
-                      )}
+                      <strong>{item.hasInvoice ? fmtVND(item.totalAmount) : "—"}</strong>
                     </td>
                   </tr>
                 ))
@@ -1837,15 +1800,8 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
             {filteredData.length > 0 && (
               <tfoot>
                 <tr style={{ fontWeight: 700, background: "var(--grey-bg)" }}>
-                  <td colSpan={7} style={{ textAlign: "right" }}>TỔNG CỘNG</td>
+                  <td colSpan={3} style={{ textAlign: "right" }}>TỔNG CỘNG</td>
                   <td style={{ textAlign: "right" }}>{fmtVND(totalAmount)}</td>
-                  <td></td>
-                </tr>
-                <tr style={{ background: "var(--grey-bg)" }}>
-                  <td colSpan={7} style={{ textAlign: "right", fontSize: 12, color: "var(--ink-400)" }}>
-                    Đã thanh toán: {fmtVND(totalPaid)} | Chưa thanh toán: {fmtVND(totalUnpaid)}
-                  </td>
-                  <td colSpan={2}></td>
                 </tr>
               </tfoot>
             )}
@@ -1856,7 +1812,6 @@ function DanhSachThu({ rooms, contracts, tenants, invoices, loadAll, notify }) {
       {/* Hướng dẫn */}
       <div className="muted small" style={{ marginTop: 12, padding: "0 4px" }}>
         💡 <strong>Hướng dẫn:</strong> Chọn tháng/năm để xem danh sách thu. 
-        Hóa đơn chưa có sẽ hiển thị "Chưa có". 
         Bấm nút "Xuất Excel" để tải file CSV.
       </div>
     </div>
@@ -2360,3 +2315,4 @@ const CSS = `
 // ============================================================
 // EXPORT DEFAULT - QUAN TRỌNG: PHẢI CÓ DÒNG NÀY
 // ============================================================
+export default App;

@@ -1302,7 +1302,7 @@ function HoaDon({ rooms, invoices, utilityReadings, loadAll, notify }) {
 }
 
 // ============================================================
-// INVOICE FORM MODAL - ĐÃ SỬA LỖI
+// INVOICE FORM MODAL - ĐÃ SỬA LỖI TỰ ĐỘNG ĐIỀN SỐ CŨ CHO P2+P3
 // ============================================================
 function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoice, onClose, onSaved, notify }) {
   const isEdit = !!existingInvoice;
@@ -1340,7 +1340,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
   const isB3 = room?.room_number?.toUpperCase().trim() === "B3";
   const isCompositeRoom = room?.room_number?.toUpperCase().trim() === "P2+P3";
 
-  // ========== TỰ ĐỘNG ĐIỀN SỐ CŨ CHO PHÒNG THƯỜNG ==========
+  // ========== SỬA LỖI: TỰ ĐỘNG ĐIỀN SỐ CŨ CHO PHÒNG THƯỜNG ==========
   useEffect(() => {
     if (isEdit) return;
     if (!roomId || !utilityReadings || isCompositeRoom) return;
@@ -1355,10 +1355,10 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
     }
   }, [roomId, utilityReadings, isEdit, isB3, isCompositeRoom]);
 
-  // ========== TỰ ĐỘNG ĐIỀN SỐ CŨ CHO PHÒNG P2+P3 ==========
-  useEffect(() => {
-    if (isEdit) return;
-    if (!isCompositeRoom || !roomId || !utilityReadings) return;
+  // ========== SỬA LỖI: TỰ ĐỘNG ĐIỀN SỐ CŨ CHO PHÒNG P2+P3 ==========
+  // Lấy dữ liệu từ tháng trước dựa trên tháng và năm hiện tại
+  const getPreviousMonthData = useCallback(() => {
+    if (!isCompositeRoom || !roomId || !utilityReadings) return null;
     
     // Tính tháng trước
     let prevMonth = month - 1;
@@ -1373,6 +1373,16 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
       (u) => u.room_id === roomId && u.month === prevMonth && u.year === prevYear
     );
     
+    return prevReading;
+  }, [isCompositeRoom, roomId, utilityReadings, month, year]);
+
+  // Effect để tự động điền số cũ khi thay đổi tháng/năm hoặc dữ liệu
+  useEffect(() => {
+    if (isEdit) return;
+    if (!isCompositeRoom || !roomId || !utilityReadings) return;
+    
+    const prevReading = getPreviousMonthData();
+    
     if (prevReading) {
       // Lấy dữ liệu P2 từ tháng trước
       setP2ElecOld(String(prevReading.p2_electricity_new || prevReading.electricity_new || 0));
@@ -1381,14 +1391,24 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
       // Lấy dữ liệu P3 từ tháng trước
       setP3ElecOld(String(prevReading.p3_electricity_new || 0));
       setP3WaterOld(String(prevReading.p3_water_new || 0));
+      
+      console.log('Đã điền số cũ cho P2+P3 từ tháng trước:', {
+        month: `${prevMonth}/${prevYear}`,
+        p2Elec: prevReading.p2_electricity_new || prevReading.electricity_new || 0,
+        p2Water: prevReading.p2_water_new || prevReading.water_new || 0,
+        p3Elec: prevReading.p3_electricity_new || 0,
+        p3Water: prevReading.p3_water_new || 0
+      });
     } else {
       // Nếu chưa có dữ liệu tháng trước, để trống
       setP2ElecOld("");
       setP2WaterOld("");
       setP3ElecOld("");
       setP3WaterOld("");
+      
+      console.log('Không tìm thấy dữ liệu tháng trước cho P2+P3');
     }
-  }, [isEdit, isCompositeRoom, roomId, utilityReadings, month, year]);
+  }, [isEdit, isCompositeRoom, roomId, utilityReadings, month, year, getPreviousMonthData]);
 
   // Tính toán cho phòng thường
   const elecUsed = isB3 ? 0 : Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
@@ -1449,24 +1469,29 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
 
     let readingPayload;
     if (isCompositeRoom) {
+      // Lưu chỉ số cho P2+P3 trong cùng một bản ghi với các trường riêng
       readingPayload = {
         room_id: roomId,
         month,
         year,
+        // P2
         p2_electricity_old: Number(p2ElecOld) || 0,
         p2_electricity_new: Number(p2ElecNew) || 0,
         p2_water_old: Number(p2WaterOld) || 0,
         p2_water_new: Number(p2WaterNew) || 0,
+        // P3
         p3_electricity_old: Number(p3ElecOld) || 0,
         p3_electricity_new: Number(p3ElecNew) || 0,
         p3_water_old: Number(p3WaterOld) || 0,
         p3_water_new: Number(p3WaterNew) || 0,
+        // Giữ lại các trường cũ cho tương thích (tổng hợp)
         electricity_old: Number(p2ElecOld) || 0,
         electricity_new: Number(p2ElecNew) || 0,
         water_old: Number(p2WaterOld) || 0,
         water_new: Number(p2WaterNew) || 0,
       };
     } else {
+      // Lưu chỉ số cho phòng thường
       readingPayload = {
         room_id: roomId,
         month,
@@ -1525,17 +1550,20 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
       return;
     }
 
+    // Chuẩn bị dữ liệu cho receipt
     const receiptData = {
       ...invoice,
       room_number: room?.room_number,
       isB3,
       isCompositeRoom,
+      // Dữ liệu phòng thường
       elec_old: isB3 ? 0 : Number(elecOld) || 0,
       elec_new: isB3 ? 0 : Number(elecNew) || 0,
       elec_used: elecUsed,
       water_old: Number(waterOld) || 0,
       water_new: Number(waterNew) || 0,
       water_used: waterUsed,
+      // Dữ liệu P2+P3
       p2_elec_old: Number(p2ElecOld) || 0,
       p2_elec_new: Number(p2ElecNew) || 0,
       p2_elec_used: p2ElecUsed,
@@ -1652,6 +1680,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
                       onChange={(e) => setP2ElecOld(e.target.value)} 
                       placeholder="0"
                       style={{ background: '#f0f7ff', fontWeight: 'bold' }}
+                      readOnly={false}
                     />
                   </Field>
                   <Field label="Số mới">
@@ -1674,6 +1703,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
                       onChange={(e) => setP2WaterOld(e.target.value)} 
                       placeholder="0"
                       style={{ background: '#f0f7ff', fontWeight: 'bold' }}
+                      readOnly={false}
                     />
                   </Field>
                   <Field label="Số mới">
@@ -1700,6 +1730,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
                       onChange={(e) => setP3ElecOld(e.target.value)} 
                       placeholder="0"
                       style={{ background: '#f0f7ff', fontWeight: 'bold' }}
+                      readOnly={false}
                     />
                   </Field>
                   <Field label="Số mới">
@@ -1722,6 +1753,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
                       onChange={(e) => setP3WaterOld(e.target.value)} 
                       placeholder="0"
                       style={{ background: '#f0f7ff', fontWeight: 'bold' }}
+                      readOnly={false}
                     />
                   </Field>
                   <Field label="Số mới">
@@ -1796,7 +1828,7 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
 }
 
 // ============================================================
-// INVOICE RECEIPT MODAL
+// INVOICE RECEIPT MODAL - ĐÃ SỬA ĐỂ HỖ TRỢ P2+P3
 // ============================================================
 function InvoiceReceiptModal({ invoice, onClose }) {
   const receiptRef = useRef(null);
@@ -2344,6 +2376,7 @@ const CSS = `
   color: var(--ink-900);
 }
 
+/* ---------- SIDEBAR ---------- */
 .sidebar {
   width: 232px;
   flex-shrink: 0;
@@ -2376,6 +2409,7 @@ const CSS = `
 .sidebar-foot { padding: 12px 8px 0; border-top: 1px solid var(--line); margin-top: 12px; }
 .sidebar-foot p { font-size: 12px; color: var(--ink-400); }
 
+/* ---------- MAIN ---------- */
 .main { flex: 1; padding: 36px 40px; max-width: 1180px; }
 .loading-screen { color: var(--ink-400); font-size: 14px; padding: 60px 0; text-align: center; }
 .page-head { margin-bottom: 28px; }
@@ -2383,6 +2417,7 @@ const CSS = `
 .page-head p { color: var(--ink-600); font-size: 14px; margin: 0; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0; }
 
+/* ---------- BUTTONS ---------- */
 .btn-primary {
   display: inline-flex; align-items: center; gap: 6px;
   background: var(--blue-500); color: #fff; border: none;
@@ -2416,6 +2451,7 @@ const CSS = `
 .inline-confirm p { font-size: 13.5px; margin: 0 0 10px; color: var(--ink-900); }
 .inline-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+/* ---------- STAT CARDS ---------- */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
 .stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
 .stat-card {
@@ -2433,6 +2469,7 @@ const CSS = `
 .stat-label { font-size: 12.5px; color: var(--ink-400); margin: 0 0 2px; }
 .stat-value { font-size: 19px; font-weight: 700; margin: 0; }
 
+/* ---------- PANELS ---------- */
 .two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; margin-bottom: 20px; }
 .panel {
   background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
@@ -2446,12 +2483,14 @@ const CSS = `
 .house-mini-row:last-child { border-bottom: none; padding-bottom: 0; }
 .house-mini-name { font-size: 13.5px; font-weight: 600; margin: 0; }
 
+/* ---------- TABLE ---------- */
 .table-scroll { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .table th { text-align: left; color: var(--ink-400); font-weight: 600; font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .table td { padding: 10px 10px; border-bottom: 1px solid var(--line); }
 .table tr:last-child td { border-bottom: none; }
 
+/* ---------- BADGES / PILLS ---------- */
 .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 100px; font-size: 12px; font-weight: 600; }
 .badge-empty { background: var(--grey-bg); color: var(--ink-600); }
 .badge-rented { background: var(--blue-50); color: var(--blue-600); }
@@ -2459,6 +2498,7 @@ const CSS = `
 .badge-paid { background: var(--green-bg); color: var(--green); }
 .pill { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 100px; background: var(--grey-bg); color: var(--ink-600); }
 
+/* ---------- ROOM ACCORDION ---------- */
 .room-accordion { display: flex; flex-direction: column; gap: 8px; }
 .room-accordion-item {
   background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
@@ -2494,6 +2534,7 @@ const CSS = `
 .room-card-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
 .room-card-actions-wrap { flex-wrap: wrap; justify-content: flex-start; gap: 4px; }
 
+/* ---------- CONTRACTS / TENANTS ---------- */
 .search-bar {
   display: flex; align-items: center; gap: 8px; background: #fff;
   border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; margin-bottom: 18px; max-width: 420px;
@@ -2509,6 +2550,7 @@ const CSS = `
 .tenant-chip { background: var(--grey-bg); color: var(--ink-600); font-size: 12.5px; padding: 5px 11px; border-radius: 100px; }
 .tenant-chip-rep { background: var(--blue-50); color: var(--blue-600); font-weight: 600; }
 
+/* ---------- INVOICES ---------- */
 .filter-bar { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
 .filter-bar select { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 13.5px; background: #fff; }
 .invoice-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
@@ -2519,11 +2561,13 @@ const CSS = `
 .invoice-total { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; font-size: 14.5px; }
 .text-center { text-align: center; }
 
+/* ---------- THU CHI ---------- */
 .tag-income { color: var(--green); background: var(--green-bg); padding: 3px 9px; border-radius: 100px; font-size: 11.5px; font-weight: 700; }
 .tag-expense { color: var(--red); background: var(--red-bg); padding: 3px 9px; border-radius: 100px; font-size: 11.5px; font-weight: 700; }
 .text-green { color: var(--green); }
 .text-red { color: var(--red); }
 
+/* ---------- MODAL ---------- */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(15,23,42,0.45);
   display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px;
@@ -2536,6 +2580,7 @@ const CSS = `
 .modal-head h3 { font-size: 16px; margin: 0; }
 .modal-body { padding: 20px 22px; }
 
+/* ---------- FORM ---------- */
 .modal-form { width: 100%; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; width: 100%; }
 .field-label { font-size: 12.5px; font-weight: 600; color: var(--ink-600); display: flex; align-items: center; }
@@ -2553,6 +2598,7 @@ const CSS = `
 .invoice-preview { background: var(--grey-bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13.5px; display: flex; flex-direction: column; gap: 6px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
+/* ---------- RECEIPT ---------- */
 .receipt-wrap { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
 .receipt-head { text-align: center; border-bottom: 1px dashed var(--line); padding-bottom: 14px; margin-bottom: 14px; }
 .receipt-room { font-size: 18px; font-weight: 700; margin: 0; }
@@ -2574,10 +2620,12 @@ const CSS = `
 .tenant-date-field input { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .checkbox-inline { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-600); white-space: nowrap; }
 
+/* ---------- EMPTY STATE ---------- */
 .empty-state { text-align: center; padding: 50px 20px; color: var(--ink-400); }
 .empty-title { font-size: 14px; font-weight: 600; color: var(--ink-600); margin: 10px 0 4px; }
 .empty-hint { font-size: 13px; margin: 0; }
 
+/* ---------- TOAST ---------- */
 .toast-stack { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
 .toast {
   display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px;
@@ -2589,6 +2637,7 @@ const CSS = `
 .muted { color: var(--ink-400); }
 .small { font-size: 12px; }
 
+/* ---------- BOTTOM NAV (mobile) ---------- */
 .bottom-nav {
   display: none;
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
@@ -2605,11 +2654,14 @@ const CSS = `
 .bottom-nav-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .bottom-nav-item.active { color: var(--blue-600); }
 
+/* ---------- RESPONSIVE MOBILE ---------- */
 @media (max-width: 1024px) {
   .sidebar { display: none; }
   .main { padding: 20px; padding-bottom: 90px; }
   .two-col, .house-grid, .room-grid, .invoice-list, .stat-grid { grid-template-columns: 1fr; }
   .bottom-nav { display: flex; }
+  
+  /* Mobile form fixes */
   .modal-panel { max-width: 100% !important; margin: 10px; }
   .modal-body { padding: 16px; }
   .field-grid-2 { grid-template-columns: 1fr; }
@@ -2622,4 +2674,6 @@ const CSS = `
 }
 `;
 
-export default App;
+// ============================================================
+// EXPORT DEFAULT
+// ============================================================

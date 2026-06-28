@@ -1356,59 +1356,40 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
   }, [roomId, utilityReadings, isEdit, isB3, isCompositeRoom]);
 
   // ========== SỬA LỖI: TỰ ĐỘNG ĐIỀN SỐ CŨ CHO PHÒNG P2+P3 ==========
-  // Lấy dữ liệu từ tháng trước dựa trên tháng và năm hiện tại
-  const getPreviousMonthData = useCallback(() => {
-    if (!isCompositeRoom || !roomId || !utilityReadings) return null;
-    
-    // Tính tháng trước
-    let prevMonth = month - 1;
-    let prevYear = year;
-    if (prevMonth === 0) {
-      prevMonth = 12;
-      prevYear = year - 1;
-    }
-    
-    // Tìm bản ghi của tháng trước
-    const prevReading = utilityReadings.find(
-      (u) => u.room_id === roomId && u.month === prevMonth && u.year === prevYear
-    );
-    
-    return prevReading;
-  }, [isCompositeRoom, roomId, utilityReadings, month, year]);
-
-  // Effect để tự động điền số cũ khi thay đổi tháng/năm hoặc dữ liệu
   useEffect(() => {
     if (isEdit) return;
     if (!isCompositeRoom || !roomId || !utilityReadings) return;
     
-    const prevReading = getPreviousMonthData();
+    // Tìm bản ghi gần nhất của phòng P2+P3
+    const readings = utilityReadings
+      .filter((u) => u.room_id === roomId)
+      .sort((a, b) => b.year - a.year || b.month - a.month);
     
-    if (prevReading) {
-      // Lấy dữ liệu P2 từ tháng trước
-      setP2ElecOld(String(prevReading.p2_electricity_new || prevReading.electricity_new || 0));
-      setP2WaterOld(String(prevReading.p2_water_new || prevReading.water_new || 0));
+    if (readings.length > 0) {
+      const latest = readings[0];
       
-      // Lấy dữ liệu P3 từ tháng trước
-      setP3ElecOld(String(prevReading.p3_electricity_new || 0));
-      setP3WaterOld(String(prevReading.p3_water_new || 0));
+      // Lấy dữ liệu P2
+      setP2ElecOld(String(latest.p2_electricity_new || latest.electricity_new || 0));
+      setP2WaterOld(String(latest.p2_water_new || latest.water_new || 0));
       
-      console.log('Đã điền số cũ cho P2+P3 từ tháng trước:', {
-        month: `${prevMonth}/${prevYear}`,
-        p2Elec: prevReading.p2_electricity_new || prevReading.electricity_new || 0,
-        p2Water: prevReading.p2_water_new || prevReading.water_new || 0,
-        p3Elec: prevReading.p3_electricity_new || 0,
-        p3Water: prevReading.p3_water_new || 0
+      // Lấy dữ liệu P3
+      setP3ElecOld(String(latest.p3_electricity_new || 0));
+      setP3WaterOld(String(latest.p3_water_new || 0));
+      
+      console.log('Đã điền số cũ cho P2+P3:', {
+        p2Elec: latest.p2_electricity_new || latest.electricity_new || 0,
+        p2Water: latest.p2_water_new || latest.water_new || 0,
+        p3Elec: latest.p3_electricity_new || 0,
+        p3Water: latest.p3_water_new || 0
       });
     } else {
-      // Nếu chưa có dữ liệu tháng trước, để trống
+      // Nếu chưa có dữ liệu, để trống hoặc set về 0
       setP2ElecOld("");
       setP2WaterOld("");
       setP3ElecOld("");
       setP3WaterOld("");
-      
-      console.log('Không tìm thấy dữ liệu tháng trước cho P2+P3');
     }
-  }, [isEdit, isCompositeRoom, roomId, utilityReadings, month, year, getPreviousMonthData]);
+  }, [roomId, utilityReadings, isEdit, isCompositeRoom]);
 
   // Tính toán cho phòng thường
   const elecUsed = isB3 ? 0 : Math.max(0, Number(elecNew || 0) - Number(elecOld || 0));
@@ -1655,32 +1636,18 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
         {/* Phòng P2+P3 */}
         {isCompositeRoom && (
           <>
-            <div className="info-banner" style={{ 
-              background: '#f0f7ff', 
-              padding: '10px 14px', 
-              borderRadius: '8px', 
-              marginBottom: '16px',
-              border: '1px solid #dbeafe',
-              fontSize: '13px',
-              color: '#1e40af'
-            }}>
-              <strong>ℹ️ Lưu ý:</strong> Số cũ được tự động lấy từ chỉ số của tháng trước. 
-              Vui lòng kiểm tra và nhập số mới cho từng phòng.
-            </div>
-
             <div className="composite-room-section" style={{ border: '1px solid var(--blue-100)', borderRadius: '10px', padding: '16px', marginBottom: '16px', background: 'var(--blue-50)' }}>
               <h4 style={{ margin: '0 0 12px 0', color: 'var(--blue-600)' }}>📋 Phòng P2</h4>
               <div className="utility-section" style={{ background: 'white' }}>
                 <p className="field-label"><Zap size={14} className="inline-icon" /> Chỉ số điện P2 (kWh)</p>
                 <div className="field-grid-2">
-                  <Field label="Số cũ (tự động)">
+                  <Field label="Số cũ">
                     <input 
                       type="number" 
                       value={p2ElecOld} 
                       onChange={(e) => setP2ElecOld(e.target.value)} 
                       placeholder="0"
-                      style={{ background: '#f0f7ff', fontWeight: 'bold' }}
-                      readOnly={false}
+                      style={{ background: '#f0f7ff' }}
                     />
                   </Field>
                   <Field label="Số mới">
@@ -1696,14 +1663,13 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
               <div className="utility-section" style={{ background: 'white' }}>
                 <p className="field-label"><Droplet size={14} className="inline-icon" /> Chỉ số nước P2 (m³)</p>
                 <div className="field-grid-2">
-                  <Field label="Số cũ (tự động)">
+                  <Field label="Số cũ">
                     <input 
                       type="number" 
                       value={p2WaterOld} 
                       onChange={(e) => setP2WaterOld(e.target.value)} 
                       placeholder="0"
-                      style={{ background: '#f0f7ff', fontWeight: 'bold' }}
-                      readOnly={false}
+                      style={{ background: '#f0f7ff' }}
                     />
                   </Field>
                   <Field label="Số mới">
@@ -1723,14 +1689,13 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
               <div className="utility-section" style={{ background: 'white' }}>
                 <p className="field-label"><Zap size={14} className="inline-icon" /> Chỉ số điện P3 (kWh)</p>
                 <div className="field-grid-2">
-                  <Field label="Số cũ (tự động)">
+                  <Field label="Số cũ">
                     <input 
                       type="number" 
                       value={p3ElecOld} 
                       onChange={(e) => setP3ElecOld(e.target.value)} 
                       placeholder="0"
-                      style={{ background: '#f0f7ff', fontWeight: 'bold' }}
-                      readOnly={false}
+                      style={{ background: '#f0f7ff' }}
                     />
                   </Field>
                   <Field label="Số mới">
@@ -1746,14 +1711,13 @@ function InvoiceFormModal({ rooms, presetRoomId, utilityReadings, existingInvoic
               <div className="utility-section" style={{ background: 'white' }}>
                 <p className="field-label"><Droplet size={14} className="inline-icon" /> Chỉ số nước P3 (m³)</p>
                 <div className="field-grid-2">
-                  <Field label="Số cũ (tự động)">
+                  <Field label="Số cũ">
                     <input 
                       type="number" 
                       value={p3WaterOld} 
                       onChange={(e) => setP3WaterOld(e.target.value)} 
                       placeholder="0"
-                      style={{ background: '#f0f7ff', fontWeight: 'bold' }}
-                      readOnly={false}
+                      style={{ background: '#f0f7ff' }}
                     />
                   </Field>
                   <Field label="Số mới">

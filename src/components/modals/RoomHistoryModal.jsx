@@ -9,8 +9,10 @@ import { fmtVND } from "../../utils/helpers";
 export default function RoomHistoryModal({ room, invoices, utilityReadings, onClose, onChanged, notify }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [localInvoices, setLocalInvoices] = useState(invoices);
 
-  const rows = invoices
+  // Lọc và sắp xếp invoices theo phòng
+  const rows = localInvoices
     .filter((inv) => inv.room_id === room.id)
     .sort((a, b) => b.year - a.year || b.month - a.month)
     .map((inv) => {
@@ -19,28 +21,65 @@ export default function RoomHistoryModal({ room, invoices, utilityReadings, onCl
       return { inv, reading };
     });
 
-  const doDelete = async () => {
-    if (!confirmDelete) return;
-    setDeleting(true);
-    const { inv, reading } = confirmDelete;
-    const { error: iErr } = await supabase.from("invoices").delete().eq("id", inv.id);
-    if (reading) {
-      await supabase.from("utility_readings").delete().eq("id", reading.id);
-    }
-    setDeleting(false);
-    setConfirmDelete(null);
-    if (iErr) return notify(iErr.message, "error");
-    notify("Đã xóa bản ghi tháng " + inv.month + "/" + inv.year);
-    onChanged();
-  };
-
   const isB3 = room.room_number?.toUpperCase().trim() === "B3";
   const isCompositeRoom = room.room_number?.toUpperCase().trim() === "P2+P3";
+
+  // Hàm xóa
+  const doDelete = async () => {
+    if (!confirmDelete) return;
+    
+    setDeleting(true);
+    const { inv, reading } = confirmDelete;
+    
+    try {
+      // Xóa invoice
+      const { error: iErr } = await supabase
+        .from("invoices")
+        .delete()
+        .eq("id", inv.id);
+      
+      if (iErr) {
+        setDeleting(false);
+        setConfirmDelete(null);
+        return notify(iErr.message, "error");
+      }
+
+      // Xóa utility_readings nếu có
+      if (reading) {
+        await supabase
+          .from("utility_readings")
+          .delete()
+          .eq("id", reading.id);
+      }
+
+      // Cập nhật local state (xóa khỏi danh sách hiển thị)
+      setLocalInvoices((prev) => prev.filter((item) => item.id !== inv.id));
+      
+      setDeleting(false);
+      setConfirmDelete(null);
+      
+      notify("Đã xóa bản ghi tháng " + inv.month + "/" + inv.year);
+      
+      // Gọi callback để refresh dữ liệu từ parent
+      if (onChanged) {
+        onChanged();
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      setDeleting(false);
+      setConfirmDelete(null);
+      notify("Lỗi khi xóa: " + error.message, "error");
+    }
+  };
 
   return (
     <Modal title={`Lịch sử chỉ số — Phòng ${room.room_number}`} onClose={onClose} width={720}>
       {rows.length === 0 ? (
-        <EmptyState icon={HistoryIcon} title="Chưa có lịch sử hóa đơn" hint="Tạo hóa đơn cho phòng này để bắt đầu ghi nhận" />
+        <EmptyState 
+          icon={HistoryIcon} 
+          title="Chưa có lịch sử hóa đơn" 
+          hint="Tạo hóa đơn cho phòng này để bắt đầu ghi nhận" 
+        />
       ) : (
         <div className="table-scroll">
           <table className="table">
@@ -62,7 +101,9 @@ export default function RoomHistoryModal({ room, invoices, utilityReadings, onCl
                 return (
                   <tr key={inv.id}>
                     <td>{inv.month}/{inv.year}</td>
-                    {!isB3 && !isCompositeRoom && <td>{reading ? reading.electricity_new : "—"}</td>}
+                    {!isB3 && !isCompositeRoom && (
+                      <td>{reading ? reading.electricity_new : "—"}</td>
+                    )}
                     {isCompositeRoom && (
                       <>
                         <td>{reading ? `${reading.p2_electricity_old || 0}→${reading.p2_electricity_new || 0}` : "—"}</td>
@@ -71,10 +112,16 @@ export default function RoomHistoryModal({ room, invoices, utilityReadings, onCl
                         <td>{reading ? `${reading.p3_water_old || 0}→${reading.p3_water_new || 0}` : "—"}</td>
                       </>
                     )}
-                    {!isCompositeRoom && <td>{reading ? reading.water_new : "—"}</td>}
+                    {!isCompositeRoom && (
+                      <td>{reading ? reading.water_new : "—"}</td>
+                    )}
                     <td><strong>{fmtVND(inv.total_amount)}</strong></td>
                     <td>
-                      <button className="icon-btn icon-btn-danger" onClick={() => setConfirmDelete({ inv, reading })}>
+                      <button 
+                        className="icon-btn icon-btn-danger" 
+                        onClick={() => setConfirmDelete({ inv, reading })}
+                        disabled={deleting}
+                      >
                         <Trash2 size={14} />
                       </button>
                     </td>
@@ -93,8 +140,18 @@ export default function RoomHistoryModal({ room, invoices, utilityReadings, onCl
             Hành động này không thể hoàn tác.
           </p>
           <div className="inline-confirm-actions">
-            <button className="btn-secondary" onClick={() => setConfirmDelete(null)}>Hủy</button>
-            <button className="btn-danger" onClick={doDelete} disabled={deleting}>
+            <button 
+              className="btn-secondary" 
+              onClick={() => setConfirmDelete(null)}
+              disabled={deleting}
+            >
+              Hủy
+            </button>
+            <button 
+              className="btn-danger" 
+              onClick={doDelete} 
+              disabled={deleting}
+            >
               {deleting ? "Đang xóa…" : "Xóa"}
             </button>
           </div>

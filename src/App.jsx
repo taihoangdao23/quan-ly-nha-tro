@@ -15,6 +15,11 @@ import ThuChi from "./components/tabs/ThuChi";
 
 import "./styles/App.css";
 
+// ============================================
+// LOGO - NHỚ COPY ẢNH VÀO public/logo.png
+// ============================================
+const logo = "/logo.png";
+
 function App() {
   const [tab, setTab] = useState("tongquan");
   const [toasts, setToasts] = useState([]);
@@ -44,8 +49,37 @@ function App() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">QT</div>
-          <div className="brand-text"><strong>QUẢN LÝ TRỌ</strong></div>
+          {/* ============================================ */}
+          {/* LOGO - ĐÃ SỬA THÀNH ẢNH */}
+          {/* ============================================ */}
+          <div 
+            className="brand-mark"
+            style={{
+              background: 'transparent',
+              width: '42px',
+              height: '42px',
+              overflow: 'hidden',
+              borderRadius: '10px',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <img 
+              src={logo} 
+              alt="Logo" 
+              style={{ 
+                width: '100%', 
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block'
+              }}
+            />
+          </div>
+          <div className="brand-text">
+            <span>QUẢN LÝ TRỌ</span>
+          </div>
         </div>
         <nav className="nav">
           {NAV_ITEMS.map((n) => {
@@ -62,7 +96,9 @@ function App() {
             );
           })}
         </nav>
-        <div className="sidebar-foot"><p>{rooms.length} phòng</p></div>
+        <div className="sidebar-foot">
+          <p>{rooms.length} phòng</p>
+        </div>
       </aside>
 
       {/* Main */}

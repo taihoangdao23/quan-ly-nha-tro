@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { 
   Plus, Home, ChevronDown, Zap, Droplet, History, Pencil, Trash2, 
-  Receipt, Users, AlertTriangle, Clock, Calendar, XCircle, CheckCircle2 
+  Receipt, Users, AlertTriangle, Clock, Calendar, XCircle, CheckCircle2,
+  ChevronRight
 } from "lucide-react";
 import Badge from "../common/Badge";
 import EmptyState from "../common/EmptyState";
@@ -20,6 +21,7 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
   const [invoiceRoom, setInvoiceRoom] = useState(null);
   const [historyRoom, setHistoryRoom] = useState(null);
   const [openRoomId, setOpenRoomId] = useState(null);
+  const [isUnregisteredOpen, setIsUnregisteredOpen] = useState(false);
 
   const totalRooms = rooms.length;
   const occupiedRooms = rooms.filter(r => r.status === "da_thue").length;
@@ -84,6 +86,10 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
     }
   };
 
+  const toggleUnregistered = () => {
+    setIsUnregisteredOpen(!isUnregisteredOpen);
+  };
+
   return (
     <div className="page">
       <header className="page-head row-between">
@@ -101,51 +107,57 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
         </button>
       </header>
 
-      {/* Danh sách chưa đăng ký tạm trú */}
+      {/* Danh sách chưa đăng ký tạm trú - DROPDOWN */}
       {unregisteredTenants.length > 0 && (
         <div className={styles.unregisteredSection}>
-          <div className={styles.unregisteredHeader}>
+          <div className={styles.unregisteredHeader} onClick={toggleUnregistered}>
             <div className={styles.unregisteredTitle}>
               <AlertTriangle size={20} className={styles.unregisteredIcon} />
-              <h2>Danh sách chưa đăng ký tạm trú</h2>
+              <h2>⚠️ Danh sách chưa đăng ký tạm trú</h2>
               <span className={styles.unregisteredCount}>{unregisteredTenants.length} khách</span>
             </div>
-            <span className={styles.unregisteredWarning}>
-              Cần cập nhật ngay
-            </span>
+            <div className={styles.unregisteredHeaderRight}>
+              <span className={styles.unregisteredWarning}>Cần cập nhật ngay</span>
+              <ChevronRight 
+                size={20} 
+                className={`${styles.unregisteredChevron} ${isUnregisteredOpen ? styles.rotated : ''}`}
+              />
+            </div>
           </div>
           
-          <div className={styles.unregisteredList}>
-            {unregisteredTenants.map((item, index) => (
-              <div key={index} className={styles.unregisteredItem}>
-                <div className={styles.unregisteredRank}>{index + 1}</div>
-                <div className={styles.unregisteredInfo}>
-                  <div className={styles.unregisteredName}>
-                    {item.tenant.full_name}
-                    <span className={styles.unregisteredRoom}>Phòng {item.room.room_number}</span>
+          {isUnregisteredOpen && (
+            <div className={styles.unregisteredList}>
+              {unregisteredTenants.map((item, index) => (
+                <div key={index} className={styles.unregisteredItem}>
+                  <div className={styles.unregisteredRank}>{index + 1}</div>
+                  <div className={styles.unregisteredInfo}>
+                    <div className={styles.unregisteredName}>
+                      {item.tenant.full_name}
+                      <span className={styles.unregisteredRoom}>Phòng {item.room.room_number}</span>
+                    </div>
+                    <div className={styles.unregisteredDetails}>
+                      <span className={styles.unregisteredReason}>
+                        <XCircle size={14} /> {item.reason}
+                      </span>
+                      {item.registrationDate && (
+                        <span>
+                          <Calendar size={14} /> Đăng ký: {fmtDate(item.registrationDate)}
+                        </span>
+                      )}
+                      {item.expiryDate && (
+                        <span className={styles.unregisteredExpired}>
+                          <Clock size={14} /> Hết hạn: {fmtDate(item.expiryDate)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className={styles.unregisteredDetails}>
-                    <span className={styles.unregisteredReason}>
-                      <XCircle size={14} /> {item.reason}
-                    </span>
-                    {item.registrationDate && (
-                      <span>
-                        <Calendar size={14} /> Đăng ký: {fmtDate(item.registrationDate)}
-                      </span>
-                    )}
-                    {item.expiryDate && (
-                      <span className={styles.unregisteredExpired}>
-                        <Clock size={14} /> Hết hạn: {fmtDate(item.expiryDate)}
-                      </span>
-                    )}
+                  <div className={styles.unregisteredStatus}>
+                    <span className={styles.unregisteredTag}>🔴 Cần xử lý</span>
                   </div>
                 </div>
-                <div className={styles.unregisteredStatus}>
-                  <span className={styles.unregisteredTag}>🔴 Cần xử lý</span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

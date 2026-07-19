@@ -42,22 +42,24 @@ import ThuChi from "./components/tabs/ThuChi";
 // Styles
 import "./styles/App.css";
 
+// ============================================
+// LOGO TỪ THƯ MỤC PUBLIC
+// ============================================
+const logo = "/logo.png";
+
 function App() {
   const [tab, setTab] = useState("tongquan");
   const [toasts, setToasts] = useState([]);
 
-  // Hàm hiển thị thông báo
   const notify = useCallback((message, type = "ok") => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, message, type }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3000);
   }, []);
 
-  // Lấy dữ liệu từ hook
   const ctx = useData(notify);
   const { rooms, contracts, tenants, invoices, loading } = ctx;
 
-  // Hàm lấy icon theo tên
   const getIcon = (iconName) => {
     const icons = {
       Home,
@@ -70,13 +72,11 @@ function App() {
     return icons[iconName] || Home;
   };
 
-  // Dashboard Content theo phong cách ảnh mẫu
+  // Dashboard Content
   const DashboardContent = () => {
-    // Tính toán thống kê
     const occupied = rooms.filter(r => r.status === "da_thue").length;
     const empty = rooms.length - occupied;
     
-    // Tính tổng khách thuê
     let totalTenants = 0;
     contracts.forEach(c => {
       if (c.status === "active") {
@@ -85,7 +85,6 @@ function App() {
       }
     });
 
-    // Tính tổng doanh thu tháng này
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
@@ -95,7 +94,6 @@ function App() {
       .filter(i => i.status === "da_thanh_toan")
       .reduce((sum, i) => sum + Number(i.total_amount || 0), 0);
 
-    // Dữ liệu cho stats
     const stats = [
       { 
         icon: Users, 
@@ -131,7 +129,6 @@ function App() {
       },
     ];
 
-    // Dữ liệu cho top phòng
     const topRooms = rooms.slice(0, 3).map((room, index) => {
       const contract = contracts.find(c => c.room_id === room.id && c.status === "active");
       const tenantCount = contract ? tenants.filter(t => t.contract_id === contract.id).length : 0;
@@ -144,7 +141,6 @@ function App() {
       };
     });
 
-    // Dữ liệu hoạt động gần đây (từ invoices)
     const recentActivities = invoices.slice(0, 3).map(inv => {
       const room = rooms.find(r => r.id === inv.room_id);
       const status = inv.status === "da_thanh_toan" ? "đã thanh toán" : "chưa thanh toán";
@@ -158,7 +154,6 @@ function App() {
 
     return (
       <div className="dashboard">
-        {/* Header */}
         <div className="dashboard-header">
           <div className="header-left">
             <h1>🏠 Bảng điều khiển</h1>
@@ -179,7 +174,6 @@ function App() {
           </div>
         </div>
 
-        {/* Stats Grid */}
         <div className="stats-grid">
           {stats.map((stat, index) => {
             const Icon = stat.icon;
@@ -200,11 +194,8 @@ function App() {
           })}
         </div>
 
-        {/* Main Grid - 2 columns */}
         <div className="dashboard-grid">
-          {/* Left Column */}
           <div className="grid-left">
-            {/* Calendar */}
             <div className="card calendar-card">
               <div className="card-header">
                 <h3>📅 Lịch & Sự kiện</h3>
@@ -239,7 +230,6 @@ function App() {
               </div>
             </div>
 
-            {/* Top Rooms */}
             <div className="card">
               <div className="card-header">
                 <h3>🏆 Phòng có tỷ lệ lấp đầy cao nhất</h3>
@@ -267,9 +257,7 @@ function App() {
             </div>
           </div>
 
-          {/* Right Column */}
           <div className="grid-right">
-            {/* Recent Activities */}
             <div className="card">
               <div className="card-header">
                 <h3>📋 Hoạt động gần đây</h3>
@@ -300,7 +288,6 @@ function App() {
               </div>
             </div>
 
-            {/* Fee Structure / Room Status */}
             <div className="card">
               <div className="card-header">
                 <h3>💰 Tình trạng phòng</h3>
@@ -333,7 +320,6 @@ function App() {
     );
   };
 
-  // Map tabs
   const tabs = {
     tongquan: <DashboardContent />,
     nha: <NhaPhong {...ctx} />,
@@ -345,10 +331,44 @@ function App() {
 
   return (
     <div className="app-shell">
-      {/* Sidebar - Menu bên trái */}
+      {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">QT</div>
+          {/* ============================================ */}
+          {/* LOGO - SỬA ĐÚNG */}
+          {/* ============================================ */}
+          <div 
+            className="brand-mark"
+            style={{ 
+              background: 'transparent',
+              width: '42px',
+              height: '42px',
+              overflow: 'hidden',
+              borderRadius: '10px',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <img 
+              src="/logo.png" 
+              alt="Logo" 
+              style={{ 
+                width: '100%', 
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block'
+              }}
+              onError={(e) => {
+                console.error('Logo load error!');
+                e.target.style.display = 'none';
+              }}
+              onLoad={() => {
+                console.log('Logo loaded successfully!');
+              }}
+            />
+          </div>
           <div className="brand-text">
             <strong>QL <span className="highlight">Trọ</span></strong>
           </div>
@@ -389,7 +409,7 @@ function App() {
         )}
       </main>
 
-      {/* Bottom Navigation (Mobile) */}
+      {/* Bottom Navigation */}
       <nav className="bottom-nav">
         {NAV_ITEMS.map((n) => {
           const Icon = getIcon(n.icon);
@@ -406,7 +426,7 @@ function App() {
         })}
       </nav>
 
-      {/* Toast Notifications */}
+      {/* Toast */}
       <Toast toasts={toasts} />
     </div>
   );

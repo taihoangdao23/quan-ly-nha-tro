@@ -1,13 +1,13 @@
 /* src/components/tabs/NhaPhong.module.css */
 
 /* ============================================================
-   ROOM GRID - 2 CỘT
+   ROOM GRID - 2 CỘT (PHẢI ĐẢM BẢO HOẠT ĐỘNG)
    ============================================================ */
 .roomGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 16px;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 16px !important;
+  margin-top: 16px !important;
 }
 
 .roomGridItem {
@@ -128,7 +128,7 @@
 }
 
 /* ============================================================
-   UNREGISTERED SECTION - CHƯA ĐĂNG KÝ TẠM TRÚ
+   UNREGISTERED SECTION - DROPDOWN (KHÔNG ẢNH HƯỞNG GRID)
    ============================================================ */
 .unregisteredSection {
   background: #fff8e1;
@@ -137,15 +137,37 @@
   padding: 16px 20px;
   margin-bottom: 20px;
   box-shadow: 0 2px 12px rgba(249, 168, 37, 0.15);
+  clear: both;
 }
 
 .unregisteredHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
   flex-wrap: wrap;
   gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition);
+}
+
+.unregisteredHeader:hover {
+  opacity: 0.85;
+}
+
+.unregisteredHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.unregisteredChevron {
+  transition: transform 0.3s ease;
+  color: #e65100;
+}
+
+.unregisteredChevron.rotated {
+  transform: rotate(90deg);
 }
 
 .unregisteredTitle {
@@ -191,10 +213,26 @@
   border: 1px solid #ffcc80;
 }
 
+/* Danh sách - Ẩn/hiện với animation */
 .unregisteredList {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #ffcc80;
+  animation: slideDown 0.3s ease forwards;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .unregisteredItem {
@@ -291,15 +329,15 @@
    ============================================================ */
 @media (max-width: 1024px) {
   .roomGrid {
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 14px !important;
   }
 }
 
 @media (max-width: 768px) {
   .roomGrid {
-    grid-template-columns: 1fr;
-    gap: 12px;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
   }
 
   .roomGridHeader {
@@ -322,8 +360,12 @@
   }
   
   .unregisteredHeader {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .unregisteredHeaderRight {
+    flex-wrap: wrap;
   }
   
   .unregisteredTitle h2 {
@@ -353,8 +395,8 @@
 
 @media (max-width: 600px) {
   .roomGrid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
   }
 
   .roomGridHeader {

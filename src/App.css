@@ -51,7 +51,7 @@ body {
 }
 
 /* ============================================================
-   SIDEBAR (Global)
+   SIDEBAR (Global) - ĐÃ SỬA LOGO
    ============================================================ */
 .sidebar {
   width: 260px;
@@ -76,18 +76,28 @@ body {
   padding: 0 8px 32px;
 }
 
+/* ============================================================
+   LOGO - ĐÃ SỬA
+   ============================================================ */
 .sidebar .brand .brand-mark {
   width: 42px;
   height: 42px;
-  background: var(--primary-gradient);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 18px;
   flex-shrink: 0;
+  overflow: hidden;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.sidebar .brand .brand-mark img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+  border-radius: 10px !important;
 }
 
 .sidebar .brand .brand-text {

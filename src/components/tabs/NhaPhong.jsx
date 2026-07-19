@@ -1,13 +1,17 @@
 // src/components/tabs/NhaPhong.jsx
 import { useState } from "react";
-import { Plus, Home, ChevronDown, Zap, Droplet, History, Pencil, Trash2, Receipt, Users } from "lucide-react";
+import { 
+  Plus, Home, ChevronDown, Zap, Droplet, History, Pencil, Trash2, 
+  Receipt, Users, AlertTriangle, Clock, Calendar, XCircle, CheckCircle2 
+} from "lucide-react";
 import Badge from "../common/Badge";
 import EmptyState from "../common/EmptyState";
 import RoomFormModal from "../modals/RoomFormModal";
 import DeleteRoomModal from "../modals/DeleteRoomModal";
 import RoomHistoryModal from "../modals/RoomHistoryModal";
 import InvoiceFormModal from "../modals/InvoiceFormModal";
-import { fmtVND } from "../../utils/helpers";
+import { fmtVND, fmtDate } from "../../utils/helpers";
+import styles from "./NhaPhong.module.css";
 
 export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityReadings, loadAll, notify }) {
   const [showRoomModal, setShowRoomModal] = useState(false);
@@ -21,13 +25,72 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
   const occupiedRooms = rooms.filter(r => r.status === "da_thue").length;
   const emptyRooms = totalRooms - occupiedRooms;
 
+  // ============================================================
+  // TÍNH TOÁN DANH SÁCH CHƯA ĐĂNG KÝ TẠM TRÚ
+  // ============================================================
+  const getUnregisteredTenants = () => {
+    const unregisteredList = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    contracts.forEach(contract => {
+      if (contract.status !== "active") return;
+      
+      const room = rooms.find(r => r.id === contract.room_id);
+      if (!room) return;
+      
+      const tenantList = tenants.filter(t => t.contract_id === contract.id);
+      
+      tenantList.forEach(tenant => {
+        let isUnregistered = false;
+        let reason = "";
+        
+        if (!tenant.residence_registration_date) {
+          isUnregistered = true;
+          reason = "Chưa đăng ký tạm trú";
+        } 
+        else if (tenant.temp_residence_expiry) {
+          const expiryDate = new Date(tenant.temp_residence_expiry);
+          expiryDate.setHours(0, 0, 0, 0);
+          if (expiryDate < today) {
+            isUnregistered = true;
+            reason = "Đã hết hạn tạm trú";
+          }
+        }
+        
+        if (isUnregistered) {
+          unregisteredList.push({
+            tenant: tenant,
+            room: room,
+            contract: contract,
+            reason: reason,
+            registrationDate: tenant.residence_registration_date,
+            expiryDate: tenant.temp_residence_expiry
+          });
+        }
+      });
+    });
+    
+    return unregisteredList;
+  };
+
+  const unregisteredTenants = getUnregisteredTenants();
+
+  const handleNotify = (message, type = "ok") => {
+    if (typeof notify === 'function') {
+      notify(message, type);
+    } else {
+      console.warn("Notify function not available:", message);
+    }
+  };
+
   return (
     <div className="page">
       <header className="page-head row-between">
         <div>
           <h1>🏠 Nhà & phòng</h1>
           <p>Danh sách tất cả các phòng đang quản lý</p>
-          <div className="stats-mini">
+          <div className={styles.statsMini}>
             <span>Tổng: <strong>{totalRooms}</strong> phòng</span>
             <span className="text-green">Đã thuê: <strong>{occupiedRooms}</strong></span>
             <span className="text-red">Trống: <strong>{emptyRooms}</strong></span>
@@ -38,63 +101,103 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
         </button>
       </header>
 
-      {/* Accordion 1 cột */}
-      <div className="room-accordion">
+      {/* Danh sách chưa đăng ký tạm trú */}
+      {unregisteredTenants.length > 0 && (
+        <div className={styles.unregisteredSection}>
+          <div className={styles.unregisteredHeader}>
+            <div className={styles.unregisteredTitle}>
+              <AlertTriangle size={20} className={styles.unregisteredIcon} />
+              <h2>Danh sách chưa đăng ký tạm trú</h2>
+              <span className={styles.unregisteredCount}>{unregisteredTenants.length} khách</span>
+            </div>
+            <span className={styles.unregisteredWarning}>
+              Cần cập nhật ngay
+            </span>
+          </div>
+          
+          <div className={styles.unregisteredList}>
+            {unregisteredTenants.map((item, index) => (
+              <div key={index} className={styles.unregisteredItem}>
+                <div className={styles.unregisteredRank}>{index + 1}</div>
+                <div className={styles.unregisteredInfo}>
+                  <div className={styles.unregisteredName}>
+                    {item.tenant.full_name}
+                    <span className={styles.unregisteredRoom}>Phòng {item.room.room_number}</span>
+                  </div>
+                  <div className={styles.unregisteredDetails}>
+                    <span className={styles.unregisteredReason}>
+                      <XCircle size={14} /> {item.reason}
+                    </span>
+                    {item.registrationDate && (
+                      <span>
+                        <Calendar size={14} /> Đăng ký: {fmtDate(item.registrationDate)}
+                      </span>
+                    )}
+                    {item.expiryDate && (
+                      <span className={styles.unregisteredExpired}>
+                        <Clock size={14} /> Hết hạn: {fmtDate(item.expiryDate)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className={styles.unregisteredStatus}>
+                  <span className={styles.unregisteredTag}>🔴 Cần xử lý</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Room Grid - 2 cột */}
+      <div className={styles.roomGrid}>
         {rooms.map((room) => {
           const activeContract = contracts.find((c) => c.room_id === room.id && c.status === "active");
           const people = activeContract ? tenants.filter((t) => t.contract_id === activeContract.id) : [];
           const isOpen = openRoomId === room.id;
           return (
-            <div key={room.id} className={`room-accordion-item ${isOpen ? "open" : ""}`}>
-              <button 
-                className="room-accordion-header" 
-                onClick={() => setOpenRoomId(isOpen ? null : room.id)}
-              >
-                <span className="room-accordion-name">
-                  <ChevronDown size={16} className={`room-accordion-chevron ${isOpen ? "rotated" : ""}`} />
-                  {room.room_number}
+            <div key={room.id} className={`${styles.roomGridItem} ${isOpen ? styles.open : ""}`}>
+              <button className={styles.roomGridHeader} onClick={() => setOpenRoomId(isOpen ? null : room.id)}>
+                <div className={styles.roomGridHeaderLeft}>
+                  <span className={styles.roomGridNumber}>{room.room_number}</span>
                   {people.length > 0 && (
-                    <span className="room-tenant-count">
+                    <span className={styles.roomGridTenantCount}>
                       <Users size={12} /> {people.length} người
                     </span>
                   )}
-                </span>
-                <span className="room-accordion-meta">
-                  <span className="room-price">{fmtVND(room.rent_price)}</span>
+                </div>
+                <div className={styles.roomGridHeaderRight}>
+                  <span className={styles.roomGridPrice}>{fmtVND(room.rent_price)}</span>
                   <Badge status={room.status} />
-                </span>
+                </div>
               </button>
 
               {isOpen && (
-                <div className="room-accordion-body">
-                  <div className="room-card-body">
-                    <div className="row-between">
-                      <span className="muted">Giá thuê</span>
-                      <strong>{fmtVND(room.rent_price)}</strong>
-                    </div>
-                    <div className="row-between">
-                      <span className="muted"><Zap size={13} className="inline-icon" /> Điện</span>
-                      <span>{fmtVND(room.electricity_price)}/kWh</span>
-                    </div>
-                    <div className="row-between">
-                      <span className="muted"><Droplet size={13} className="inline-icon" /> Nước</span>
-                      <span>{fmtVND(room.water_price)}/m³</span>
-                    </div>
-                    <div className="row-between">
-                      <span className="muted">Tiền rác</span>
-                      <span>{fmtVND(room.trash_price)}/tháng</span>
-                    </div>
+                <div className={styles.roomGridBody}>
+                  <div className={styles.roomGridDetails}>
+                    <div className="row-between"><span className="muted">Giá thuê</span><strong>{fmtVND(room.rent_price)}</strong></div>
+                    <div className="row-between"><span className="muted"><Zap size={13} className="inline-icon" /> Điện</span><span>{fmtVND(room.electricity_price)}/kWh</span></div>
+                    <div className="row-between"><span className="muted"><Droplet size={13} className="inline-icon" /> Nước</span><span>{fmtVND(room.water_price)}/m³</span></div>
+                    <div className="row-between"><span className="muted">Tiền rác</span><span>{fmtVND(room.trash_price)}/tháng</span></div>
                     {people.length > 0 && (
-                      <div className="tenant-chip-list room-card-tenants">
-                        {people.map((p) => (
-                          <span key={p.id} className={`tenant-chip ${p.is_representative ? "tenant-chip-rep" : ""}`}>
-                            {p.full_name}{p.is_representative ? " · chủ phòng" : ""}
-                          </span>
-                        ))}
+                      <div className={`tenant-chip-list ${styles.roomGridTenants}`}>
+                        {people.map((p) => {
+                          const isUnregistered = unregisteredTenants.some(u => u.tenant.id === p.id);
+                          return (
+                            <span 
+                              key={p.id} 
+                              className={`tenant-chip ${p.is_representative ? "tenant-chip-rep" : ""} ${isUnregistered ? styles.unregisteredChip : ""}`}
+                            >
+                              {p.full_name}
+                              {p.is_representative ? " · chủ phòng" : ""}
+                              {isUnregistered && <span className={styles.unregisteredBadge}>⚠️</span>}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
-                  <div className="room-card-actions room-card-actions-wrap">
+                  <div className={styles.roomGridActions}>
                     {room.status === "da_thue" && (
                       <button className="btn-ghost-sm btn-ghost-highlight" onClick={() => setInvoiceRoom(room)}>
                         <Receipt size={14} /> Lên hóa đơn
@@ -116,7 +219,9 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
           );
         })}
         {rooms.length === 0 && (
-          <EmptyState icon={Home} title="Chưa có phòng nào" hint="Thêm phòng đầu tiên để bắt đầu quản lý" />
+          <div className={styles.emptyStateFull}>
+            <EmptyState icon={Home} title="Chưa có phòng nào" hint="Thêm phòng đầu tiên để bắt đầu quản lý" />
+          </div>
         )}
       </div>
 
@@ -129,9 +234,9 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
           onSaved={() => { 
             setShowRoomModal(false); 
             loadAll(); 
-            notify(editRoom ? "Đã cập nhật phòng" : "Đã thêm phòng mới"); 
+            handleNotify(editRoom ? "Đã cập nhật phòng thành công!" : "Đã thêm phòng mới thành công!"); 
           }} 
-          notify={notify} 
+          notify={handleNotify}
         />
       )}
 
@@ -142,9 +247,9 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
           onDeleted={() => { 
             setDeleteRoom(null); 
             loadAll(); 
-            notify("Đã xóa phòng"); 
+            handleNotify("Đã xóa phòng thành công!"); 
           }} 
-          notify={notify} 
+          notify={handleNotify}
         />
       )}
 
@@ -157,9 +262,9 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
           onSaved={() => { 
             setInvoiceRoom(null); 
             loadAll(); 
-            notify("Đã tạo hóa đơn"); 
+            handleNotify("Đã tạo hóa đơn thành công!"); 
           }} 
-          notify={notify} 
+          notify={handleNotify}
         />
       )}
 
@@ -170,7 +275,7 @@ export default function NhaPhong({ rooms, contracts, tenants, invoices, utilityR
           utilityReadings={utilityReadings} 
           onClose={() => setHistoryRoom(null)} 
           onChanged={loadAll} 
-          notify={notify} 
+          notify={handleNotify}
         />
       )}
     </div>

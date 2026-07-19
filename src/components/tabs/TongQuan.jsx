@@ -1,9 +1,10 @@
 // src/components/tabs/TongQuan.jsx
-import { Building2, CheckCircle2, Circle, AlertCircle, TrendingUp, TrendingDown, DollarSign, Home, Users } from "lucide-react";
+import { Building2, CheckCircle2, Circle, AlertCircle, Calendar, Clock, AlertTriangle, Users, Home } from "lucide-react";
 import Badge from "../common/Badge";
-import { fmtVND } from "../../utils/helpers";
+import { fmtVND, fmtDate } from "../../utils/helpers";
+import styles from "./TongQuan.module.css";
 
-export default function TongQuan({ rooms, invoices, expenses }) {
+export default function TongQuan({ rooms, invoices, expenses, contracts, tenants }) {
   const occupied = rooms.filter((r) => r.status === "da_thue").length;
   const empty = rooms.length - occupied;
   const unpaid = invoices.filter((i) => i.status === "chua_thanh_toan");
@@ -25,6 +26,61 @@ export default function TongQuan({ rooms, invoices, expenses }) {
     })
     .reduce((s, e) => s + Number(e.amount), 0);
 
+  // ============================================================
+  // TÍNH TOÁN DANH SÁCH GIA HẠN TẠM TRÚ
+  // ============================================================
+  const getExpiringTenants = () => {
+    const expiringList = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const twoMonthsLater = new Date(today);
+    twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
+
+    // Duyệt qua tất cả hợp đồng đang hoạt động
+    contracts.forEach(contract => {
+      if (contract.status !== "active") return;
+      
+      // Tìm phòng của hợp đồng
+      const room = rooms.find(r => r.id === contract.room_id);
+      if (!room) return;
+      
+      // Lấy danh sách khách thuê trong hợp đồng
+      const tenantList = tenants.filter(t => t.contract_id === contract.id);
+      
+      tenantList.forEach(tenant => {
+        // Kiểm tra nếu có ngày hết hạn tạm trú
+        if (!tenant.temp_residence_expiry) return;
+        
+        const expiryDate = new Date(tenant.temp_residence_expiry);
+        expiryDate.setHours(0, 0, 0, 0);
+        
+        // Kiểm tra nếu ngày hết hạn trong vòng 2 tháng tới (tính từ hôm nay)
+        if (expiryDate >= today && expiryDate <= twoMonthsLater) {
+          // Tính số ngày còn lại
+          const diffTime = expiryDate - today;
+          const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          expiringList.push({
+            tenant: tenant,
+            room: room,
+            contract: contract,
+            expiryDate: expiryDate,
+            daysRemaining: daysRemaining,
+            isUrgent: daysRemaining <= 30 // Còn 30 ngày là khẩn cấp
+          });
+        }
+      });
+    });
+    
+    // Sắp xếp theo số ngày còn lại tăng dần (người gần nhất lên đầu)
+    expiringList.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    
+    return expiringList;
+  };
+
+  const expiringTenants = getExpiringTenants();
+
+  // Stats cho dashboard
   const stats = [
     {
       title: "Tổng số phòng",
@@ -32,7 +88,6 @@ export default function TongQuan({ rooms, invoices, expenses }) {
       icon: Building2,
       color: "blue",
       change: `+0%`,
-      changeLabel: "so với tháng trước"
     },
     {
       title: "Đang thuê",
@@ -40,7 +95,6 @@ export default function TongQuan({ rooms, invoices, expenses }) {
       icon: CheckCircle2,
       color: "green",
       change: `+${occupied > 0 ? Math.round(occupied / rooms.length * 100) : 0}%`,
-      changeLabel: "tỷ lệ lấp đầy"
     },
     {
       title: "Phòng trống",
@@ -48,7 +102,6 @@ export default function TongQuan({ rooms, invoices, expenses }) {
       icon: Circle,
       color: "orange",
       change: empty > 0 ? `${Math.round(empty / rooms.length * 100)}%` : "0%",
-      changeLabel: "còn trống"
     },
     {
       title: "Hóa đơn chưa thu",
@@ -56,7 +109,6 @@ export default function TongQuan({ rooms, invoices, expenses }) {
       icon: AlertCircle,
       color: "red",
       change: `+${unpaid.length}`,
-      changeLabel: "hóa đơn chưa thanh toán"
     },
   ];
 
@@ -66,6 +118,58 @@ export default function TongQuan({ rooms, invoices, expenses }) {
         <h1>📊 Tổng quan</h1>
         <p>Tình hình nhà trọ tháng {now.getMonth() + 1}/{now.getFullYear()}</p>
       </header>
+
+      {/* ============================================================
+          PHẦN GIA HẠN TẠM TRÚ - ĐẶT LÊN ĐẦU TRANG
+          ============================================================ */}
+      <div className={styles.expiringSection}>
+        <div className={styles.expiringHeader}>
+          <div className={styles.expiringTitle}>
+            <AlertTriangle size={22} className={styles.expiringIcon} />
+            <h2>Gia hạn tạm trú</h2>
+            {expiringTenants.length > 0 && (
+              <span className={styles.expiringCount}>{expiringTenants.length} khách</span>
+            )}
+          </div>
+          <span className={styles.expiringWarning}>
+            ⚠️ Cần gia hạn trong vòng 2 tháng
+          </span>
+        </div>
+
+        {expiringTenants.length > 0 ? (
+          <div className={styles.expiringList}>
+            {expiringTenants.map((item, index) => (
+              <div key={index} className={`${styles.expiringItem} ${item.isUrgent ? styles.urgent : ''}`}>
+                <div className={styles.expiringRank}>#{index + 1}</div>
+                <div className={styles.expiringInfo}>
+                  <div className={styles.expiringName}>
+                    {item.tenant.full_name}
+                    <span className={styles.expiringRoom}>Phòng {item.room.room_number}</span>
+                  </div>
+                  <div className={styles.expiringDetails}>
+                    <span>
+                      <Calendar size={14} /> Hết hạn: <strong>{fmtDate(item.expiryDate)}</strong>
+                    </span>
+                    <span className={`${styles.expiringDays} ${item.isUrgent ? styles.urgent : styles.warning}`}>
+                      <Clock size={14} /> Còn <strong>{item.daysRemaining}</strong> ngày
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.expiringStatus}>
+                  <span className={`${styles.statusTag} ${item.isUrgent ? styles.urgent : styles.warning}`}>
+                    {item.isUrgent ? '🔴 Khẩn cấp' : '🟡 Sắp hết hạn'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className={styles.expiringEmpty}>
+            <CheckCircle2 size={32} color="#34a853" />
+            <p>✅ Không có khách thuê nào sắp hết hạn tạm trú</p>
+          </div>
+        )}
+      </div>
 
       {/* Stats Grid */}
       <div className="stats-grid">
@@ -79,9 +183,7 @@ export default function TongQuan({ rooms, invoices, expenses }) {
               <div className="stat-info">
                 <span className="stat-label">{stat.title}</span>
                 <span className="stat-value">{stat.value}</span>
-                <span className={`stat-change ${stat.change.startsWith('+') ? 'up' : 'down'}`}>
-                  {stat.change} {stat.changeLabel}
-                </span>
+                <span className="stat-change up">{stat.change}</span>
               </div>
             </div>
           );
@@ -91,7 +193,7 @@ export default function TongQuan({ rooms, invoices, expenses }) {
       {/* Two Column Layout */}
       <div className="two-col">
         {/* Left Column - Revenue */}
-        <div className="panel revenue-panel">
+        <div className="panel">
           <h3>💰 Thu trong tháng</h3>
           <div className="revenue-item">
             <span className="muted">Đã thu</span>
@@ -124,7 +226,7 @@ export default function TongQuan({ rooms, invoices, expenses }) {
         </div>
 
         {/* Right Column - Empty Rooms */}
-        <div className="panel empty-rooms-panel">
+        <div className="panel">
           <h3>🏠 Phòng còn trống</h3>
           <div className="empty-rooms-list">
             {rooms.filter((r) => r.status === "trong").map((r) => (
@@ -148,12 +250,10 @@ export default function TongQuan({ rooms, invoices, expenses }) {
 
       {/* Unpaid Invoices */}
       {unpaid.length > 0 && (
-        <div className="panel invoice-panel">
+        <div className="panel">
           <div className="invoice-header">
             <h3>📄 Hóa đơn chưa thanh toán ({unpaid.length})</h3>
-            <span className="invoice-total-badge">
-              Tổng: {fmtVND(unpaidTotal)}
-            </span>
+            <span className="invoice-total-badge">Tổng: {fmtVND(unpaidTotal)}</span>
           </div>
           <div className="table-scroll">
             <table className="table">
@@ -170,16 +270,10 @@ export default function TongQuan({ rooms, invoices, expenses }) {
                   const room = rooms.find((r) => r.id === inv.room_id);
                   return (
                     <tr key={inv.id}>
-                      <td>
-                        <strong>{room?.room_number || "—"}</strong>
-                      </td>
+                      <td><strong>{room?.room_number || "—"}</strong></td>
                       <td>{inv.month}/{inv.year}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        <strong>{fmtVND(inv.total_amount)}</strong>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <Badge status={inv.status} />
-                      </td>
+                      <td style={{ textAlign: 'right' }}><strong>{fmtVND(inv.total_amount)}</strong></td>
+                      <td style={{ textAlign: 'center' }}><Badge status={inv.status} /></td>
                     </tr>
                   );
                 })}

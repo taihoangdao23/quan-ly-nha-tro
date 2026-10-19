@@ -1,6 +1,7 @@
 // src/components/tabs/DanhSachThu.jsx
-import { useState, useMemo } from "react";
-import { Receipt, CheckCircle2, Circle, Search, Filter, FileSpreadsheet } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { Receipt, CheckCircle2, Circle, Search, Filter, FileSpreadsheet, Send } from "lucide-react";
+import html2canvas from "html2canvas";
 import EmptyState from "../common/EmptyState";
 import { MONTHS, YEARS, THIS_YEAR } from "../../constants";
 import { fmtVND } from "../../utils/helpers";
@@ -9,6 +10,9 @@ export default function DanhSachThu({ rooms, contracts, tenants, invoices, loadA
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(THIS_YEAR);
   const [searchText, setSearchText] = useState("");
+  const [copying, setCopying] = useState(false);
+
+  const tableWrapRef = useRef(null);
 
   const occupiedRooms = useMemo(() => {
     return rooms.filter((r) => r.status === "da_thue");
@@ -61,6 +65,71 @@ export default function DanhSachThu({ rooms, contracts, tenants, invoices, loadA
     link.click();
     URL.revokeObjectURL(link.href);
     notify("Đã xuất file CSV");
+  };
+
+  const handleCopyImage = async () => {
+    if (filteredData.length === 0) {
+      return notify("Không có dữ liệu để gửi", "error");
+    }
+    const el = tableWrapRef.current;
+    if (!el) return;
+
+    setCopying(true);
+    try {
+      const canvas = await html2canvas(el, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        scrollY: -window.scrollY,
+        scrollX: -window.scrollX,
+        onclone: (clonedDoc) => {
+          // Khởi tạo phần tử được chụp trong DOM ảo (cloned DOM)
+          const clonedEl = clonedDoc.querySelector(`[data-capture="danh-sach-thu"]`);
+          if (clonedEl) {
+            // Ép khung chụp về kích thước Mobile thon gọn (430px) để đồng bộ mọi thiết bị
+            clonedEl.style.width = "430px";
+            clonedEl.style.maxWidth = "430px";
+            clonedEl.style.minWidth = "430px";
+            clonedEl.style.borderRadius = "0px"; // Cho thẳng viền chuẩn biên nhận di động
+            clonedEl.style.boxSizing = "border-box";
+            clonedEl.style.padding = "24px 16px";
+          }
+
+          const clonedTableScroll = clonedDoc.querySelector(".table-scroll");
+          if (clonedTableScroll) {
+            clonedTableScroll.style.overflow = "visible";
+            clonedTableScroll.style.maxHeight = "none";
+          }
+
+          // Căn chỉnh chữ bảng cho khít và đẹp mắt trong khung hẹp
+          const clonedTable = clonedDoc.querySelector(".table");
+          if (clonedTable) {
+            clonedTable.style.width = "100%";
+            clonedTable.style.fontSize = "13px";
+          }
+        },
+      });
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setCopying(false);
+          return notify("Không thể tạo ảnh", "error");
+        }
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          notify("Đã sao chép ảnh danh sách thu (bản Mobile)! Hãy dán (Ctrl+V) vào Zalo.");
+        } catch (err) {
+          console.error(err);
+          notify("Trình duyệt chặn sao chép ảnh. Hãy cấp quyền Clipboard cho trang web.", "error");
+        }
+        setCopying(false);
+      }, "image/png");
+    } catch (e) {
+      console.error(e);
+      notify("Có lỗi khi tạo ảnh danh sách", "error");
+      setCopying(false);
+    }
   };
 
   return (
@@ -116,42 +185,75 @@ export default function DanhSachThu({ rooms, contracts, tenants, invoices, loadA
       </div>
 
       <div className="panel">
-        <div className="table-scroll">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Phòng</th>
-                <th>Chủ hộ/Đại diện</th>
-                <th style={{ textAlign: "right" }}>Tổng tiền</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.length === 0 ? (
+        {/* Khung được chụp làm ảnh (được gán data-capture="danh-sach-thu" để style lại trên DOM ảo) */}
+        <div 
+          ref={tableWrapRef} 
+          data-capture="danh-sach-thu"
+          style={{ 
+            background: "#ffffff", 
+            padding: "20px 20px 24px 20px", 
+            borderRadius: "8px",
+            boxSizing: "border-box" 
+          }}
+        >
+          <div style={{ marginBottom: "14px", borderBottom: "2px solid #e5e7eb", paddingBottom: "10px" }}>
+            <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "#111827" }}>
+              DANH SÁCH THU TIỀN THÁNG {selectedMonth}/{selectedYear}
+            </h3>
+          </div>
+          <div className="table-scroll">
+            <table className="table" style={{ width: "100%", color: "#111827", borderCollapse: "collapse" }}>
+              <thead>
                 <tr>
-                  <td colSpan={3} style={{ textAlign: "center", padding: "40px 0" }}>
-                    <EmptyState icon={Receipt} title="Không có dữ liệu" hint="Không có phòng nào đang thuê hoặc chưa có hóa đơn" />
-                  </td>
+                  <th style={{ textAlign: "left", color: "#111827", padding: "10px 8px" }}>Phòng</th>
+                  <th style={{ textAlign: "left", color: "#111827", padding: "10px 8px" }}>Chủ hộ/Đại diện</th>
+                  <th style={{ textAlign: "right", color: "#111827", padding: "10px 8px" }}>Tổng tiền</th>
                 </tr>
-              ) : (
-                filteredData.map((item) => (
-                  <tr key={item.roomId}>
-                    <td><strong>{item.roomNumber}</strong></td>
-                    <td>{item.representative}</td>
-                    <td style={{ textAlign: "right" }}><strong>{item.hasInvoice ? fmtVND(item.totalAmount) : "—"}</strong></td>
+              </thead>
+              <tbody>
+                {filteredData.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ textAlign: "center", padding: "40px 0" }}>
+                      <EmptyState icon={Receipt} title="Không có dữ liệu" hint="Không có phòng nào đang thuê hoặc chưa có hóa đơn" />
+                    </td>
                   </tr>
-                ))
+                ) : (
+                  filteredData.map((item) => (
+                    <tr key={item.roomId} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={{ color: "#111827", padding: "10px 8px" }}><strong>{item.roomNumber}</strong></td>
+                      <td style={{ color: "#111827", padding: "10px 8px" }}>{item.representative}</td>
+                      <td style={{ textAlign: "right", color: "#111827", padding: "10px 8px" }}>
+                        <strong>{item.hasInvoice ? fmtVND(item.totalAmount) : "—"}</strong>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {filteredData.length > 0 && (
+                <tfoot>
+                  <tr style={{ fontWeight: 700, background: "#f9fafb", color: "#111827", borderTop: "2px solid #e5e7eb" }}>
+                    <td colSpan={2} style={{ textAlign: "right", padding: "12px 8px" }}>TỔNG CỘNG</td>
+                    <td style={{ textAlign: "right", padding: "12px 8px" }}>{fmtVND(totalAmount)}</td>
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {filteredData.length > 0 && (
-              <tfoot>
-                <tr style={{ fontWeight: 700, background: "var(--bg)" }}>
-                  <td colSpan={2} style={{ textAlign: "right" }}>TỔNG CỘNG</td>
-                  <td style={{ textAlign: "right" }}>{fmtVND(totalAmount)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+            </table>
+          </div>
         </div>
+
+        {/* Nút gửi danh sách */}
+        {filteredData.length > 0 && (
+          <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
+            <button 
+              className="btn-secondary" 
+              onClick={handleCopyImage} 
+              disabled={copying}
+              style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}
+            >
+              <Send size={16} /> {copying ? "Đang xử lý..." : "Gửi Danh Sách"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

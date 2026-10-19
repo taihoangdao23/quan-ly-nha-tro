@@ -1,6 +1,6 @@
 // src/components/tabs/DanhSachThu.jsx
 import { useState, useMemo } from "react";
-import { Receipt, CheckCircle2, Circle, Download, Search, Filter, FileSpreadsheet } from "lucide-react";
+import { Receipt, CheckCircle2, Circle, Search, Filter, FileSpreadsheet } from "lucide-react";
 import EmptyState from "../common/EmptyState";
 import { MONTHS, YEARS, THIS_YEAR } from "../../constants";
 import { fmtVND } from "../../utils/helpers";
@@ -10,7 +10,9 @@ export default function DanhSachThu({ rooms, contracts, tenants, invoices, loadA
   const [selectedYear, setSelectedYear] = useState(THIS_YEAR);
   const [searchText, setSearchText] = useState("");
 
-  const occupiedRooms = rooms.filter((r) => r.status === "da_thue");
+  const occupiedRooms = useMemo(() => {
+    return rooms.filter((r) => r.status === "da_thue");
+  }, [rooms]);
 
   const tableData = useMemo(() => {
     return occupiedRooms.map((room) => {
@@ -45,10 +47,11 @@ export default function DanhSachThu({ rooms, contracts, tenants, invoices, loadA
 
   const exportToCSV = () => {
     if (filteredData.length === 0) return notify("Không có dữ liệu để xuất", "error");
-    const headers = ["STT", "Phòng", "Chủ hộ/Đại diện", "Tổng tiền", "Trạng thái"];
-    const rows = filteredData.map((item, index) => [
-      index + 1, item.roomNumber, item.representative, item.totalAmount || 0,
-      item.status === "da_thanh_toan" ? "Đã thanh toán" : "Chưa thanh toán"
+    const headers = ["Phòng", "Chủ hộ/Đại diện", "Tổng tiền"];
+    const rows = filteredData.map((item) => [
+      item.roomNumber,
+      item.representative,
+      item.totalAmount || 0,
     ]);
     let csvContent = headers.join(",") + "\n" + rows.map(row => row.join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
@@ -117,30 +120,24 @@ export default function DanhSachThu({ rooms, contracts, tenants, invoices, loadA
           <table className="table">
             <thead>
               <tr>
-                <th style={{ width: 50 }}>STT</th>
                 <th>Phòng</th>
                 <th>Chủ hộ/Đại diện</th>
                 <th style={{ textAlign: "right" }}>Tổng tiền</th>
-                <th style={{ textAlign: "center" }}>Trạng thái</th>
               </tr>
             </thead>
             <tbody>
               {filteredData.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: "center", padding: "40px 0" }}>
-                  <EmptyState icon={Receipt} title="Không có dữ liệu" hint="Không có phòng nào đang thuê hoặc chưa có hóa đơn" />
-                </td></tr>
+                <tr>
+                  <td colSpan={3} style={{ textAlign: "center", padding: "40px 0" }}>
+                    <EmptyState icon={Receipt} title="Không có dữ liệu" hint="Không có phòng nào đang thuê hoặc chưa có hóa đơn" />
+                  </td>
+                </tr>
               ) : (
-                filteredData.map((item, index) => (
+                filteredData.map((item) => (
                   <tr key={item.roomId}>
-                    <td>{index + 1}</td>
                     <td><strong>{item.roomNumber}</strong></td>
                     <td>{item.representative}</td>
                     <td style={{ textAlign: "right" }}><strong>{item.hasInvoice ? fmtVND(item.totalAmount) : "—"}</strong></td>
-                    <td style={{ textAlign: "center" }}>
-                      <span className={`status-badge ${item.status === "da_thanh_toan" ? "rented" : "empty"}`}>
-                        {item.status === "da_thanh_toan" ? "✅ Đã thu" : "⏳ Chưa thu"}
-                      </span>
-                    </td>
                   </tr>
                 ))
               )}
@@ -148,9 +145,8 @@ export default function DanhSachThu({ rooms, contracts, tenants, invoices, loadA
             {filteredData.length > 0 && (
               <tfoot>
                 <tr style={{ fontWeight: 700, background: "var(--bg)" }}>
-                  <td colSpan={3} style={{ textAlign: "right" }}>TỔNG CỘNG</td>
+                  <td colSpan={2} style={{ textAlign: "right" }}>TỔNG CỘNG</td>
                   <td style={{ textAlign: "right" }}>{fmtVND(totalAmount)}</td>
-                  <td></td>
                 </tr>
               </tfoot>
             )}

@@ -52,17 +52,19 @@ export default function InvoiceReceiptModal({ invoice, onClose }) {
     }
   };
 
+  const labelStyle = { color: "#111827", fontWeight: 500 };
+
   return (
     <Modal title="Hóa đơn đã tạo" onClose={onClose} width={460}>
-      <div className="receipt-wrap" ref={receiptRef}>
+      <div className="receipt-wrap" ref={receiptRef} style={{ color: "#111827" }}>
         <div className="receipt-head">
-          <p className="receipt-room">Phòng {invoice.room_number}</p>
-          <p className="receipt-month">Hóa đơn tháng {invoice.month}/{invoice.year}</p>
+          <p className="receipt-room" style={{ color: "#111827", fontWeight: 700 }}>Phòng {invoice.room_number}</p>
+          <p className="receipt-month" style={{ color: "#111827" }}>Hóa đơn tháng {invoice.month}/{invoice.year}</p>
         </div>
 
         <div className="receipt-body">
           <div className="row-between">
-            <span className="muted">Tiền phòng</span>
+            <span style={labelStyle}>Tiền phòng</span>
             <span>{fmtVND(invoice.rent_amount)}</span>
           </div>
           
@@ -70,37 +72,37 @@ export default function InvoiceReceiptModal({ invoice, onClose }) {
             <>
               <div style={{ paddingLeft: '12px', borderLeft: '3px solid var(--blue-100)', margin: '4px 0' }}>
                 <div className="row-between">
-                  <span className="muted">P2 - Điện ({invoice.p2_elec_old} → {invoice.p2_elec_new}, {invoice.p2_elec_used} kWh)</span>
-                  <span>{fmtVND(invoice.p2_elec_used * invoice.electricity_price)}</span>
+                  <span style={labelStyle}>P2 - Điện ({invoice.p2_elec_old} → {invoice.p2_elec_new}, {invoice.p2_elec_used} kWh)</span>
+                  <span>{fmtVND((invoice.p2_elec_used * invoice.electricity_price) || (invoice.total_elec_amount / 2))}</span>
                 </div>
                 <div className="row-between">
-                  <span className="muted">P2 - Nước ({invoice.p2_water_old} → {invoice.p2_water_new}, {invoice.p2_water_used} m³)</span>
-                  <span>{fmtVND(invoice.p2_water_used * invoice.water_price)}</span>
+                  <span style={labelStyle}>P2 - Nước ({invoice.p2_water_old} → {invoice.p2_water_new}, {invoice.p2_water_used} m³)</span>
+                  <span>{fmtVND((invoice.p2_water_used * invoice.water_price) || (invoice.total_water_amount / 2))}</span>
                 </div>
                 <div className="row-between">
-                  <span className="muted">P3 - Điện ({invoice.p3_elec_old} → {invoice.p3_elec_new}, {invoice.p3_elec_used} kWh)</span>
-                  <span>{fmtVND(invoice.p3_elec_used * invoice.electricity_price)}</span>
+                  <span style={labelStyle}>P3 - Điện ({invoice.p3_elec_old} → {invoice.p3_elec_new}, {invoice.p3_elec_used} kWh)</span>
+                  <span>{fmtVND((invoice.p3_elec_used * invoice.electricity_price) || (invoice.total_elec_amount / 2))}</span>
                 </div>
                 <div className="row-between">
-                  <span className="muted">P3 - Nước ({invoice.p3_water_old} → {invoice.p3_water_new}, {invoice.p3_water_used} m³)</span>
-                  <span>{fmtVND(invoice.p3_water_used * invoice.water_price)}</span>
+                  <span style={labelStyle}>P3 - Nước ({invoice.p3_water_old} → {invoice.p3_water_new}, {invoice.p3_water_used} m³)</span>
+                  <span>{fmtVND((invoice.p3_water_used * invoice.water_price) || (invoice.total_water_amount / 2))}</span>
                 </div>
               </div>
               <div className="row-between" style={{ borderTop: '1px dashed var(--line)', paddingTop: '6px' }}>
-                <span className="muted">Tổng điện + nước</span>
-                <span>{fmtVND(invoice.total_elec_amount + invoice.total_water_amount)}</span>
+                <span style={labelStyle}>Tổng điện + nước</span>
+                <span>{fmtVND(Number(invoice.total_elec_amount || 0) + Number(invoice.total_water_amount || 0))}</span>
               </div>
             </>
           ) : (
             <>
               {!isB3 && (
                 <div className="row-between">
-                  <span className="muted"><Zap size={13} className="inline-icon" /> Điện ({invoice.elec_old} → {invoice.elec_new}, {invoice.elec_used} kWh)</span>
+                  <span style={labelStyle}><Zap size={13} className="inline-icon" /> Điện ({invoice.elec_old} → {invoice.elec_new}, {invoice.elec_used} kWh)</span>
                   <span>{fmtVND(invoice.electricity_amount)}</span>
                 </div>
               )}
               <div className="row-between">
-                <span className="muted">
+                <span style={labelStyle}>
                   <Droplet size={13} className="inline-icon" /> Nước 
                   {isB3 ? ` (${invoice.water_old} → ${invoice.water_new}, trừ ${invoice.water_subtract || 0}, dùng ${invoice.water_used} m³)` : ` (${invoice.water_old} → ${invoice.water_new}, ${invoice.water_used} m³)`}
                 </span>
@@ -110,18 +112,18 @@ export default function InvoiceReceiptModal({ invoice, onClose }) {
           )}
           
           <div className="row-between">
-            <span className="muted">Tiền rác</span>
+            <span style={labelStyle}>Tiền rác</span>
             <span>{fmtVND(invoice.trash_amount)}</span>
           </div>
           {Number(invoice.other_amount) > 0 && (
             <div className="row-between">
-              <span className="muted">{invoice.other_note || "Phụ thu khác"}</span>
+              <span style={labelStyle}>{invoice.other_note || "Phụ thu khác"}</span>
               <span>{fmtVND(invoice.other_amount)}</span>
             </div>
           )}
           <div className="invoice-total row-between">
-            <strong>Tổng thanh toán</strong>
-            <strong>{fmtVND(invoice.total_amount)}</strong>
+            <strong style={{ color: "#000" }}>Tổng thanh toán</strong>
+            <strong style={{ color: "#000" }}>{fmtVND(invoice.total_amount)}</strong>
           </div>
         </div>
       </div>

@@ -128,7 +128,7 @@
 }
 
 /* ============================================================
-   UNREGISTERED SECTION - DROPDOWN (KHÔNG ẢNH HƯỞNG GRID)
+   UNREGISTERED & RENEW SECTION - DROPDOWN 2 NHÓM
    ============================================================ */
 .unregisteredSection {
   background: #fff8e1;
@@ -152,13 +152,14 @@
 }
 
 .unregisteredHeader:hover {
-  opacity: 0.85;
+  opacity: 0.88;
 }
 
 .unregisteredHeaderRight {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .unregisteredChevron {
@@ -203,36 +204,84 @@
   border-radius: 20px;
 }
 
-.unregisteredWarning {
-  color: #e65100;
+.badgeRenewSummary {
+  color: #b45309;
   font-size: 12px;
   font-weight: 600;
-  background: #fff3e0;
-  padding: 3px 14px;
+  background: #fef3c7;
+  padding: 3px 12px;
   border-radius: 20px;
-  border: 1px solid #ffcc80;
+  border: 1px solid #fcd34d;
 }
 
-/* Danh sách - Ẩn/hiện với animation */
-.unregisteredList {
+.unregisteredWarning {
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fee2e2;
+  padding: 3px 12px;
+  border-radius: 20px;
+  border: 1px solid #fca5a5;
+}
+
+/* Khung nội dung khi sổ xuống */
+.dropdownBody {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #ffcc80;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #ffcc80;
-  animation: slideDown 0.3s ease forwards;
+  gap: 16px;
+  animation: slideDown 0.25s ease forwards;
 }
 
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.groupBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.groupHeadingRenew {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border-left: 4px solid #f59e0b;
+}
+
+.groupHeadingUnregistered {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #b91c1c;
+  background: #fee2e2;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border-left: 4px solid #ef4444;
+}
+
+.unregisteredList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .unregisteredItem {
@@ -242,12 +291,20 @@
   padding: 10px 14px;
   background: #ffffff;
   border-radius: var(--radius-sm);
-  border-left: 4px solid #f9a825;
   transition: var(--transition);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.itemRenew {
+  border-left: 4px solid #f59e0b;
+}
+
+.itemUnreg {
+  border-left: 4px solid #ef4444;
 }
 
 .unregisteredItem:hover {
-  transform: translateX(4px);
+  transform: translateX(3px);
   box-shadow: var(--shadow-hover);
 }
 
@@ -255,7 +312,7 @@
   font-size: 13px;
   font-weight: 700;
   color: var(--text-secondary);
-  min-width: 28px;
+  min-width: 24px;
 }
 
 .unregisteredInfo {
@@ -270,18 +327,18 @@
 
 .unregisteredRoom {
   font-size: 12px;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--text-secondary);
   margin-left: 8px;
   background: var(--bg);
-  padding: 1px 10px;
+  padding: 2px 10px;
   border-radius: 12px;
 }
 
 .unregisteredDetails {
   display: flex;
   gap: 16px;
-  margin-top: 2px;
+  margin-top: 3px;
   font-size: 12px;
   color: var(--text-secondary);
   flex-wrap: wrap;
@@ -294,23 +351,53 @@
 }
 
 .unregisteredReason {
-  color: #e65100;
+  color: #dc2626;
   font-weight: 600;
 }
 
 .unregisteredExpired {
-  color: #ea4335;
+  color: #d97706;
   font-weight: 600;
 }
 
-.unregisteredStatus .unregisteredTag {
-  font-size: 11px;
+/* Nút Đăng ký & Gia hạn trên từng dòng */
+.itemAction {
+  display: flex;
+  align-items: center;
+}
+
+.btnRegister {
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 3px 12px;
-  border-radius: 20px;
-  background: #fff3e0;
-  color: #e65100;
+  cursor: pointer;
   white-space: nowrap;
+  transition: background 0.2s ease;
+}
+
+.btnRegister:hover {
+  background: #b91c1c;
+}
+
+.btnRenew {
+  background: #d97706;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease;
+}
+
+.btnRenew:hover {
+  background: #b45309;
 }
 
 /* Badge trên chip tenant */
@@ -322,6 +409,63 @@
 .unregisteredBadge {
   margin-left: 4px;
   font-size: 12px;
+}
+
+/* ============================================================
+   MODAL THÔNG TIN CÁ NHÂN & CẬP NHẬT TẠM TRÚ
+   ============================================================ */
+.tenantProfileCard {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.tenantProfileHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tenantAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #e0f2fe;
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.tenantProfileRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  color: #111827;
+}
+
+.tamTruFormBox {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.tamTruFormTitle {
+  margin: 0 0 12px 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ============================================================
@@ -354,42 +498,36 @@
   .roomGridBody {
     padding: 0 14px 14px;
   }
-  
+
   .unregisteredSection {
     padding: 14px;
   }
-  
-  .unregisteredHeader {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  
-  .unregisteredHeaderRight {
-    flex-wrap: wrap;
-  }
-  
+
   .unregisteredTitle h2 {
     font-size: 15px;
   }
-  
+
   .unregisteredItem {
     flex-direction: column;
     align-items: flex-start;
-    gap: 6px;
+    gap: 8px;
     padding: 10px 12px;
   }
-  
+
   .unregisteredDetails {
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
   }
-  
-  .unregisteredStatus {
+
+  .itemAction {
     width: 100%;
   }
-  
-  .unregisteredStatus .unregisteredTag {
-    display: inline-block;
+
+  .btnRegister,
+  .btnRenew {
+    width: 100%;
+    padding: 8px 14px;
+    text-align: center;
   }
 }
 
@@ -410,24 +548,24 @@
   .roomGridBody {
     padding: 0 14px 12px;
   }
-  
+
   .unregisteredSection {
     padding: 12px;
     border-width: 2px;
   }
-  
+
   .unregisteredTitle h2 {
     font-size: 14px;
   }
-  
+
   .unregisteredName {
     font-size: 13px;
   }
-  
+
   .unregisteredDetails {
     font-size: 11px;
   }
-  
+
   .unregisteredRank {
     font-size: 12px;
     min-width: 22px;

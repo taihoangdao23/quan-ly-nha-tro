@@ -2,17 +2,27 @@
 import { useState, useMemo, useRef } from "react";
 import { 
   Building2, CheckCircle2, Circle, AlertCircle, Calendar, 
-  Clock, AlertTriangle, Receipt, Send 
+  Clock, AlertTriangle, Receipt, Send, XCircle, ChevronRight,
+  Phone, CreditCard, MapPin, ShieldCheck, Save
 } from "lucide-react";
 import html2canvas from "html2canvas";
+import { supabase } from "../../supabaseClient";
 import Badge from "../common/Badge";
 import EmptyState from "../common/EmptyState";
+import Modal from "../common/Modal";
 import { fmtVND, fmtDate } from "../../utils/helpers";
 import styles from "./TongQuan.module.css";
 
-export default function TongQuan({ rooms, invoices, expenses, contracts, tenants, notify }) {
+export default function TongQuan({ rooms, invoices, expenses, contracts, tenants, loadAll, notify }) {
   const [copying, setCopying] = useState(false);
   const tableWrapRef = useRef(null);
+
+  // State cho thanh thông báo tạm trú xổ xuống & Modal cập nhật
+  const [isTamTruOpen, setIsTamTruOpen] = useState(false);
+  const [tamTruModal, setTamTruModal] = useState(null); // { tenant, room, mode: 'register' | 'renew' }
+  const [regDateInput, setRegDateInput] = useState("");
+  const [expDateInput, setExpDateInput] = useState("");
+  const [savingTamTru, setSavingTamTru] = useState(false);
 
   const occupied = rooms.filter((r) => r.status === "da_thue").length;
   const empty = rooms.length - occupied;
@@ -38,15 +48,25 @@ export default function TongQuan({ rooms, invoices, expenses, contracts, tenants
     })
     .reduce((s, e) => s + Number(e.amount), 0);
 
+  const handleNotify = (message, type = "ok") => {
+    if (typeof notify === "function") {
+      notify(message, type);
+    } else {
+      console.warn("Notify function not available:", message);
+    }
+  };
+
   // ============================================================
-  // TÍNH TOÁN DANH SÁCH GIA HẠN TẠM TRÚ
+  // 1. PHÂN LOẠI 2 NHÓM TẠM TRÚ (CẦN GIA HẠN <= 1 THÁNG & CHƯA ĐĂNG KÝ)
   // ============================================================
-  const getExpiringTenants = () => {
-    const expiringList = [];
+  const { renewList, unregisteredList } = useMemo(() => {
+    const renew = [];
+    const unregistered = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const twoMonthsLater = new Date(today);
-    twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
+
+    const oneMonthLater = new Date(today);
+    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
 
     contracts.forEach((contract) => {
       if (contract.status !== "active") return;
@@ -57,35 +77,91 @@ export default function TongQuan({ rooms, invoices, expenses, contracts, tenants
       const tenantList = tenants.filter((t) => t.contract_id === contract.id);
 
       tenantList.forEach((tenant) => {
-        if (!tenant.temp_residence_expiry) return;
-
-        const expiryDate = new Date(tenant.temp_residence_expiry);
-        expiryDate.setHours(0, 0, 0, 0);
-
-        if (expiryDate >= today && expiryDate <= twoMonthsLater) {
-          const diffTime = expiryDate - today;
-          const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-          expiringList.push({
-            tenant: tenant,
-            room: room,
-            contract: contract,
-            expiryDate: expiryDate,
-            daysRemaining: daysRemaining,
-            isUrgent: daysRemaining <= 30,
+        // Nhóm 2: Chưa đăng ký tạm trú
+        if (!tenant.residence_registration_date) {
+          unregistered.push({
+            tenant,
+            room,
+            contract,
           });
+          return;
+        }
+
+        // Nhóm 1: Đã đăng ký nhưng còn <= 1 tháng là hết hạn (hoặc đã hết hạn)
+        if (tenant.temp_residence_expiry) {
+          const expiryDate = new Date(tenant.temp_residence_expiry);
+          expiryDate.setHours(0, 0, 0, 0);
+
+          if (expiryDate <= oneMonthLater) {
+            const diffTime = expiryDate - today;
+            const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            renew.push({
+              tenant,
+              room,
+              contract,
+              expiryDate: tenant.temp_residence_expiry,
+              registrationDate: tenant.residence_registration_date,
+              daysRemaining,
+              isExpired: daysRemaining < 0,
+            });
+          }
         }
       });
     });
 
-    expiringList.sort((a, b) => a.daysRemaining - b.daysRemaining);
-    return expiringList;
+    renew.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    return { renewList: renew, unregisteredList: unregistered };
+  }, [contracts, rooms, tenants]);
+
+  const totalAlertCount = renewList.length + unregisteredList.length;
+
+  const openTamTruModal = (tenant, room, mode) => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    setTamTruModal({ tenant, room, mode });
+    setRegDateInput(tenant.residence_registration_date || todayStr);
+    setExpDateInput(tenant.temp_residence_expiry || "");
   };
 
-  const expiringTenants = getExpiringTenants();
+  const handleSaveTamTru = async (e) => {
+    e.preventDefault();
+    if (!tamTruModal) return;
+
+    if (!regDateInput) {
+      return handleNotify("Vui lòng chọn ngày đăng ký tạm trú", "error");
+    }
+    if (!expDateInput) {
+      return handleNotify("Vui lòng chọn ngày hết hạn tạm trú", "error");
+    }
+
+    setSavingTamTru(true);
+    try {
+      const { error } = await supabase
+        .from("tenants")
+        .update({
+          residence_registration_date: regDateInput,
+          temp_residence_expiry: expDateInput,
+        })
+        .eq("id", tamTruModal.tenant.id);
+
+      if (error) throw error;
+
+      handleNotify(
+        tamTruModal.mode === "register"
+          ? `Đã đăng ký tạm trú cho ${tamTruModal.tenant.full_name}`
+          : `Đã gia hạn tạm trú cho ${tamTruModal.tenant.full_name}`
+      );
+      setTamTruModal(null);
+      if (typeof loadAll === "function") loadAll();
+    } catch (err) {
+      handleNotify(err.message || "Lỗi khi cập nhật thông tin tạm trú", "error");
+    } finally {
+      setSavingTamTru(false);
+    }
+  };
 
   // ============================================================
-  // TÍNH TOÁN DANH SÁCH THU TIỀN THÁNG HIỆN TẠI
+  // 2. TÍNH TOÁN DANH SÁCH THU TIỀN THÁNG HIỆN TẠI
   // ============================================================
   const collectionList = useMemo(() => {
     const occupiedRooms = rooms.filter((r) => r.status === "da_thue");
@@ -166,14 +242,10 @@ export default function TongQuan({ rooms, invoices, expenses, contracts, tenants
         }
         try {
           await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          if (typeof notify === "function") {
-            notify("Đã sao chép ảnh danh sách thu! Hãy dán (Ctrl+V) vào Zalo.");
-          }
+          handleNotify("Đã sao chép ảnh danh sách thu! Hãy dán (Ctrl+V) vào Zalo.");
         } catch (err) {
           console.error(err);
-          if (typeof notify === "function") {
-            notify("Trình duyệt chặn sao chép ảnh.", "error");
-          }
+          handleNotify("Trình duyệt chặn sao chép ảnh.", "error");
         }
         setCopying(false);
       }, "image/png");
@@ -225,71 +297,125 @@ export default function TongQuan({ rooms, invoices, expenses, contracts, tenants
       </header>
 
       {/* ============================================================
-          1. PHẦN GIA HẠN TẠM TRÚ
+          1. THANH THÔNG BÁO ĐĂNG KÝ & GIA HẠN TẠM TRÚ (2 NHÓM)
           ============================================================ */}
-      <div className={styles.expiringSection}>
-        <div className={styles.expiringHeader}>
-          <div className={styles.expiringTitle}>
-            <AlertTriangle size={22} className={styles.expiringIcon} />
-            <h2>Gia hạn tạm trú</h2>
-            {expiringTenants.length > 0 && (
-              <span className={styles.expiringCount}>{expiringTenants.length} khách</span>
-            )}
+      {totalAlertCount > 0 ? (
+        <div className={styles.unregisteredSection}>
+          <div className={styles.unregisteredHeader} onClick={() => setIsTamTruOpen(!isTamTruOpen)}>
+            <div className={styles.unregisteredTitle}>
+              <AlertTriangle size={20} className={styles.unregisteredIcon} />
+              <h2>⚠️ Thông báo đăng ký & gia hạn tạm trú</h2>
+              <span className={styles.unregisteredCount}>{totalAlertCount} khách</span>
+            </div>
+            <div className={styles.unregisteredHeaderRight}>
+              {renewList.length > 0 && (
+                <span className={styles.badgeRenewSummary}>
+                  ⏰ {renewList.length} sắp hết hạn
+                </span>
+              )}
+              {unregisteredList.length > 0 && (
+                <span className={styles.unregisteredWarning}>
+                  🔴 {unregisteredList.length} chưa đăng ký
+                </span>
+              )}
+              <ChevronRight
+                size={20}
+                className={`${styles.unregisteredChevron} ${isTamTruOpen ? styles.rotated : ""}`}
+              />
+            </div>
           </div>
-          <span className={styles.expiringWarning}>
-            ⚠️ Cần gia hạn trong vòng 2 tháng
-          </span>
-        </div>
 
-        {expiringTenants.length > 0 ? (
-          <div className={styles.expiringList}>
-            {expiringTenants.map((item, index) => (
-              <div
-                key={index}
-                className={`${styles.expiringItem} ${item.isUrgent ? styles.urgent : ""}`}
-              >
-                <div className={styles.expiringRank}>#{index + 1}</div>
-                <div className={styles.expiringInfo}>
-                  <div className={styles.expiringName}>
-                    {item.tenant.full_name}
-                    <span className={styles.expiringRoom}>Phòng {item.room.room_number}</span>
+          {isTamTruOpen && (
+            <div className={styles.dropdownBody}>
+              {/* NHÓM 1: CẦN GIA HẠN TẠM TRÚ TRƯỚC 1 THÁNG */}
+              {renewList.length > 0 && (
+                <div className={styles.groupBlock}>
+                  <div className={styles.groupHeadingRenew}>
+                    <Clock size={15} />
+                    <span>Nhóm 1: Cần gia hạn tạm trú (còn dưới 1 tháng) — {renewList.length} người</span>
                   </div>
-                  <div className={styles.expiringDetails}>
-                    <span>
-                      <Calendar size={14} /> Hết hạn:{" "}
-                      <strong>{fmtDate(item.expiryDate)}</strong>
-                    </span>
-                    <span
-                      className={`${styles.expiringDays} ${
-                        item.isUrgent ? styles.urgent : styles.warning
-                      }`}
-                    >
-                      <Clock size={14} /> Còn <strong>{item.daysRemaining}</strong> ngày
-                    </span>
+                  <div className={styles.unregisteredList}>
+                    {renewList.map((item, index) => (
+                      <div key={item.tenant.id} className={`${styles.unregisteredItem} ${styles.itemRenew}`}>
+                        <div className={styles.unregisteredRank}>{index + 1}</div>
+                        <div className={styles.unregisteredInfo}>
+                          <div className={styles.unregisteredName}>
+                            {item.tenant.full_name}
+                            <span className={styles.unregisteredRoom}>Phòng {item.room.room_number}</span>
+                          </div>
+                          <div className={styles.unregisteredDetails}>
+                            <span className={styles.unregisteredExpired}>
+                              <Clock size={13} />{" "}
+                              {item.isExpired
+                                ? `Đã quá hạn ${Math.abs(item.daysRemaining)} ngày`
+                                : `Còn ${item.daysRemaining} ngày nữa hết hạn tạm trú`}
+                            </span>
+                            <span>
+                              <Calendar size={13} /> Hết hạn: <strong>{fmtDate(item.expiryDate)}</strong>
+                            </span>
+                          </div>
+                        </div>
+                        <div className={styles.itemAction}>
+                          <button
+                            className={styles.btnRenew}
+                            onClick={() => openTamTruModal(item.tenant, item.room, "renew")}
+                          >
+                            Gia hạn
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className={styles.expiringStatus}>
-                  <span
-                    className={`${styles.statusTag} ${
-                      item.isUrgent ? styles.urgent : styles.warning
-                    }`}
-                  >
-                    {item.isUrgent ? "🔴 Khẩn cấp" : "🟡 Sắp hết hạn"}
-                  </span>
+              )}
+
+              {/* NHÓM 2: CHƯA ĐĂNG KÝ TẠM TRÚ */}
+              {unregisteredList.length > 0 && (
+                <div className={styles.groupBlock}>
+                  <div className={styles.groupHeadingUnregistered}>
+                    <XCircle size={15} />
+                    <span>Nhóm 2: Chưa đăng ký tạm trú — {unregisteredList.length} người</span>
+                  </div>
+                  <div className={styles.unregisteredList}>
+                    {unregisteredList.map((item, index) => (
+                      <div key={item.tenant.id} className={`${styles.unregisteredItem} ${styles.itemUnreg}`}>
+                        <div className={styles.unregisteredRank}>{index + 1}</div>
+                        <div className={styles.unregisteredInfo}>
+                          <div className={styles.unregisteredName}>
+                            {item.tenant.full_name}
+                            <span className={styles.unregisteredRoom}>Phòng {item.room.room_number}</span>
+                          </div>
+                          <div className={styles.unregisteredDetails}>
+                            <span className={styles.unregisteredReason}>
+                              <XCircle size={13} /> Người này chưa đăng ký tạm trú
+                            </span>
+                          </div>
+                        </div>
+                        <div className={styles.itemAction}>
+                          <button
+                            className={styles.btnRegister}
+                            onClick={() => openTamTruModal(item.tenant, item.room, "register")}
+                          >
+                            Đăng ký
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className={styles.expiringEmpty}>
-            <CheckCircle2 size={32} color="#34a853" />
-            <p>✅ Không có khách thuê nào sắp hết hạn tạm trú</p>
-          </div>
-        )}
-      </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className={styles.tamTruOkBanner}>
+          <CheckCircle2 size={20} color="#16a34a" />
+          <span>Tất cả khách thuê đều đã đăng ký và còn hạn tạm trú.</span>
+        </div>
+      )}
 
       {/* ============================================================
-          2. DANH SÁCH THU TIỀN THÁNG HIỆN TẠI (NGAY SAU GIA HẠN TẠM TRÚ)
+          2. DANH SÁCH THU TIỀN THÁNG HIỆN TẠI (NGAY SAU THÔNG BÁO TẠM TRÚ)
           ============================================================ */}
       <div className={styles.collectionSection}>
         <div
@@ -510,6 +636,120 @@ export default function TongQuan({ rooms, invoices, expenses, contracts, tenants
             </table>
           </div>
         </div>
+      )}
+
+      {/* ============================================================
+          MODAL THÔNG TIN NGƯỜI THUÊ & CẬP NHẬT TẠM TRÚ
+          ============================================================ */}
+      {tamTruModal && (
+        <Modal
+          title={
+            tamTruModal.mode === "register"
+              ? "Đăng ký tạm trú mới"
+              : "Gia hạn tạm trú"
+          }
+          onClose={() => setTamTruModal(null)}
+          width={480}
+        >
+          <form onSubmit={handleSaveTamTru} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Bảng thông tin cá nhân người thuê */}
+            <div className={styles.tenantProfileCard}>
+              <div className={styles.tenantProfileHead}>
+                <div className={styles.tenantAvatar}>
+                  {tamTruModal.tenant.full_name?.charAt(0)?.toUpperCase() || "K"}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, color: "#111827" }}>
+                    {tamTruModal.tenant.full_name}
+                  </h3>
+                  <span className="small muted">
+                    Phòng {tamTruModal.room?.room_number || "—"}
+                    {tamTruModal.tenant.is_representative ? " · Đại diện hợp đồng" : ""}
+                  </span>
+                </div>
+              </div>
+
+              <div className={styles.tenantProfileRows}>
+                <div className="row-between">
+                  <span className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Phone size={14} /> Số điện thoại:
+                  </span>
+                  <strong>{tamTruModal.tenant.phone || "Chưa cập nhật"}</strong>
+                </div>
+                <div className="row-between">
+                  <span className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <CreditCard size={14} /> Số CCCD:
+                  </span>
+                  <strong>
+                    {tamTruModal.tenant.citizen_id || tamTruModal.tenant.cccd || "Chưa cập nhật"}
+                  </strong>
+                </div>
+                <div className="row-between" style={{ alignItems: "flex-start" }}>
+                  <span className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+                    <MapPin size={14} /> Nơi thường trú:
+                  </span>
+                  <span style={{ textAlign: "right", maxWidth: "62%", fontWeight: 500 }}>
+                    {tamTruModal.tenant.permanent_address || tamTruModal.tenant.hometown || "Chưa cập nhật"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2 trường nhập Ngày đăng ký và Ngày hết hạn tạm trú */}
+            <div className={styles.tamTruFormBox}>
+              <p className={styles.tamTruFormTitle}>
+                <ShieldCheck size={16} /> Thông tin đăng ký tạm trú
+              </p>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 13 }}>
+                  Ngày đăng ký tạm trú *
+                </label>
+                <input
+                  type="date"
+                  className="input"
+                  value={regDateInput}
+                  onChange={(e) => setRegDateInput(e.target.value)}
+                  required
+                  style={{ width: "100%" }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 13 }}>
+                  Ngày hết hạn tạm trú *
+                </label>
+                <input
+                  type="date"
+                  className="input"
+                  value={expDateInput}
+                  onChange={(e) => setExpDateInput(e.target.value)}
+                  required
+                  style={{ width: "100%" }}
+                />
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setTamTruModal(null)}
+                disabled={savingTamTru}
+              >
+                Hủy
+              </button>
+              <button type="submit" className="btn-primary" disabled={savingTamTru}>
+                <Save size={15} />{" "}
+                {savingTamTru
+                  ? "Đang lưu..."
+                  : tamTruModal.mode === "register"
+                  ? "Lưu đăng ký"
+                  : "Lưu gia hạn"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );
